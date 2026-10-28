@@ -58,3 +58,27 @@ fun formatSeconds(seconds: Double): String {
     val s = total - m * 60
     return if (m > 0) "%d:%04.1f".format(m, s) else "%.1fs".format(s)
 }
+
+/** `m:ss` or `h:mm:ss`, for timers and timestamps. */
+fun formatClock(seconds: Double): String {
+    val total = seconds.coerceAtLeast(0.0).toLong()
+    val h = total / 3600
+    val m = (total % 3600) / 60
+    val s = total % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+}
+
+/** Linear-interpolation resample, for short clips such as a voice sample. */
+fun resample(samples: FloatArray, from: Int, to: Int): FloatArray {
+    if (from == to || samples.isEmpty()) return samples
+    val out = FloatArray((samples.size.toLong() * to / from).toInt())
+    val step = from.toDouble() / to
+    for (i in out.indices) {
+        val x = i * step
+        val j = x.toInt().coerceAtMost(samples.size - 1)
+        val k = (j + 1).coerceAtMost(samples.size - 1)
+        val t = (x - j).toFloat()
+        out[i] = samples[j] + (samples[k] - samples[j]) * t
+    }
+    return out
+}

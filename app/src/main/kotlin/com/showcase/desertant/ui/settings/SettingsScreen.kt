@@ -37,7 +37,7 @@ import com.showcase.desertant.ui.components.ShowcaseScaffold
 import com.showcase.desertant.ui.components.Stat
 
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen(onBack: () -> Unit, openLab: () -> Unit) {
     val hub = LocalModelHub.current
     val context = LocalContext.current
     val status by hub.status.collectAsState()
@@ -48,7 +48,17 @@ fun SettingsScreen(onBack: () -> Unit) {
 
     LaunchedEffect(status) { cacheBytes = hub.cacheBytes() }
 
-    ShowcaseScaffold("Settings & models", onBack) {
+    ShowcaseScaffold("Settings", onBack) {
+        SectionCard("Privacy") {
+            Text(
+                "Photos, recordings, transcripts and voice profiles are analyzed and stored only on this phone. The app goes online once per model, to download its weights from Hugging Face.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        SectionCard("Model lab") {
+            Text("Try each Desert Ant model on its own — the building blocks behind Photos, Meetings and People.", style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = openLab) { Text("Open the model lab") }
+        }
         SectionCard("License key") {
             Text(
                 "Most apps can use the SDK for free without a key. If Desert Ant Labs gave you a publishable key (pk_live_…), it is sent when a model's license is activated.",
@@ -108,7 +118,7 @@ fun SettingsScreen(onBack: () -> Unit) {
         }
         SectionCard("About") {
             Text(
-                "Models by Desert Ant Labs, under the Desert Ant Labs Source-Available License: free for most apps, commercial license at scale.",
+                "Burrow runs on-device models by Desert Ant Labs, under the Desert Ant Labs Source-Available License: free for most apps, commercial license at scale.",
                 style = MaterialTheme.typography.bodySmall,
             )
             Row {

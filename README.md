@@ -1,61 +1,72 @@
-# Desert Ant Showcase (Android)
+# Burrow: private on-device AI for your photos, meetings and people
 
-An Android app that runs **every Desert Ant Labs model that ships for Android**, on the device, with real inputs: your microphone, your audio and video files, your photos, your typing and your finger on a canvas. It also chains the models into end-to-end pipelines.
+Burrow is an Android app that solves three everyday jobs end to end, using small AI models that run **only on your phone**. It's built on the [Desert Ant Labs](https://desertant.com) on-device models (`ai.desertant:*:4.2.1`).
 
-Built on the official SDK (`ai.desertant:*:4.2.1` on Maven Central). The models run locally through LiteRT. Weights download once from Hugging Face; after that, text, audio and photos never leave the phone.
+## Photos: clear the clutter
 
-## What's inside
+Your camera roll fills up with bursts, retakes, blurry shots and screenshots.
 
-| Model | Playground |
-| --- | --- |
-| **Voz**: speech to text | Record or pick audio/video. Get the transcript plus word chips with timestamps; tap a word to hear it. An optional Ear check warns when the language isn't one Voz supports. Share the transcript. |
-| **Ear**: spoken language ID | Identifies the language across 102 languages, with a configurable window count, reliability, and whether Voz can transcribe it. |
-| **Who**: speaker diarization | Per-speaker timeline lanes, talk-time share, a minimum-share filter (`keepingSpeakers`), and tap-to-play turns. |
-| **Clear**: speech enhancement | Strength, loudness presets (Apple Podcasts, Spotify, YouTube, Broadcast or off) and output sample rate. A/B playback of before and after, measured LUFS and true peak, and WAV export. |
-| **Eye**: photo understanding | *One photo:* tags at the recommended or strict cutoff, kind, aesthetic/keeper/cover scores, rotation, faces with pose and expressions, and box overlays for faces, landmarks, people, pets and the best square crop. *Library:* pick up to 30 photos to find the best shot (`Eye.best`), near-duplicate groups (`Eye.duplicates`), tag search, and similar photos (`Eye.similar`). |
-| **Moderator**: NSFW detection | Threshold, policy and quality options, per-region scores, and a preview that stays blurred while unchecked or flagged. |
-| **Redact**: PII redaction | Color-highlighted detections, a per-category filter (ORG is opt-in), a confidence slider, and a round-trip demo: edit the "LLM output" and `restore()` fills the originals back in. |
-| **Gist**: topic tagging | Top topics or all 36 scores, plus a channel roll-up across several posts (`channelTopics`). |
-| **Emo**: emoji suggestions | Live suggestions as you type, with a count and skin-tone choice; tap one to insert it. |
-| **Tongue**: text language ID | Live detection per keystroke (bundled, no download), candidates, "too close to call", the reliability verdict and the script router. |
-| **Shapes**: sketch to shape | A drawing canvas: each stroke becomes a clean shape, or stays as ink when it isn't one. Arrows get heads, and a scribble erases what it covers. Rotation and confidence options. |
+1. **Scan**: pick all photos or one album, and a period (30 days, 90 days, 1 year or all time). The scan runs in the background with a notification, and you can lock the phone. Photos already scanned are skipped, so rescans are quick.
+2. **Similar shots**: near-duplicates taken moments apart are grouped into one *moment*. The best shot is starred and kept (eyes open, then the best faces, then the keeper score), and the others are preselected for deletion. Tap to change a choice, hold to look closer, or "Keep all".
+3. **Throwaway shots and screenshots**: blurry, accidental, test or empty shots are listed separately, and so are screenshots.
+4. **Move to trash**: one system-confirmed step moves the selection to Android's trash, where it stays recoverable for 30 days. A header shows how much space you can free.
+5. **Find photos** by what's in them: "dog", "beach", "receipt", "smiling".
 
-**Pipelines**
+Uses **Eye**: scene and quality tags, faces, embeddings, `Eye.duplicates` and `Eye.best`.
 
-- **Private meeting notes**: Clear → Ear → Voz → Who → Redact → Gist. Produces a "who said what" transcript with PII removed and topics tagged, with per-step timings, and lets you share the notes.
-- **Smart compose**: Tongue → Redact → Gist → Emo, live on a message as you type.
+## Meetings: record, understand, remember
 
-**Settings** has download-all, per-model download and unload (frees native memory; the files stay cached), cache size, and an optional license key.
+1. **Record** a meeting. It keeps going with the screen off, from a foreground service with pause/stop in the notification. You can also **import** any audio or video file, or bring in **call recordings**: Android doesn't let apps record calls, but Samsung's Phone app can (Phone → Settings → Record calls), and Burrow lists those recordings for one-tap import.
+2. **Processing** happens in the background, on the phone: language (Ear) → transcript with word timings (Voz, in ~10-minute chunks cut at pauses) → who spoke when (Who) → topics and highlights (Gist) → follow-ups → voice matching to people.
+3. **The meeting page** shows:
+   - the title (auto-named from the topics), date, length, language and topics;
+   - a player with a speaker timeline: tap anywhere to jump there;
+   - **Who was there**: each speaker's talk time and share, with "Sounds like Alice · 84% voice match ✓ ✗";
+   - **Highlights**: key sentences spread across the meeting;
+   - **Possible follow-ups**: commitments such as "I'll send…" or "we need to…" (English phrasing);
+   - **Transcript** as chat bubbles coloured per speaker; tap a line to play it, the current line lights up, and you can search inside it.
+4. **Search across every transcript**, and **share notes**, optionally with names, numbers, emails and addresses **redacted on the phone first** (Redact).
 
-Models that aren't on Android in SDK 4.2.1 (Align, Clips, Title, Uhm, and the closed-beta Face, Schemer and Toxic) are not included.
+On the Fold 7's inner screen, the meeting list and the open meeting sit side by side, and within a meeting the overview and the transcript are side by side too.
 
-## Build & run
+## People: speaker profiles
 
-Requirements: Android Studio Ladybug or newer (or JDK 17 + Android SDK 35), and an **arm64-v8a** device on API 24+ (any recent phone, e.g. Galaxy Z Fold 7). The build is arm64-only to keep the APK small; add `"x86_64"` to `abiFilters` in `app/build.gradle.kts` to run on a desktop emulator.
+Who tells speakers apart within one recording. Burrow links them across recordings:
+
+- **Name a speaker once** ("Who is this?" → pick a person, "This is me", or a new name). Burrow learns that voice from the recording.
+- **Next time** that voice is heard, the meeting suggests the person with a match score, and you confirm or dismiss it. Every confirmation improves their voice profile. You can also record a 15-second voice sample on a person's page.
+- **A person's page** shows their conversations, total talk time and share per meeting, the languages they speak, **what they talk about** (Gist topics rolled up across meetings, weighted to recent ones), quotes in their own words, and links to every meeting.
+- The **voices to name** inbox collects unnamed speakers from recent meetings.
+
+*How voice matching works:* the Who SDK doesn't expose its internal voice embeddings, so Burrow computes its own compact voice signature: MFCC statistics plus median pitch over each speaker's own turns. Each match is a suggestion you confirm; nothing is linked without you. It works best for a handful of regular contacts recorded on the same phone.
+
+## Privacy
+
+Photos, recordings, transcripts, people and voice profiles are analysed and stored only in the app's private storage on the device. The app goes online only to download each model's weights from Hugging Face the first time it's used. Sharing notes is always your explicit action.
+
+## Also inside
+
+**Settings → Model lab** keeps a playground for each of the 11 Android models (Voz, Ear, Who, Clear, Eye, Moderator, Redact, Gist, Emo, Tongue, Shapes), for trying them on their own.
+
+## Build
+
+Requirements: JDK 17 and Android SDK 35 (or Android Studio). The build targets **arm64-v8a**, Android 11+.
 
 ```bash
-./gradlew assembleRelease     # optimized (R8), installable APK: app/build/outputs/apk/release/app-release.apk
-./gradlew installDebug        # or open the folder in Android Studio and press Run
+./gradlew assembleRelease   # app/build/outputs/apk/release/app-release.apk (R8-optimized)
+./gradlew testDebugUnitTest # voice signatures, speaker attribution, chunking, follow-ups
 ```
 
-The release build is signed with the debug key so it installs directly; use your own signing config before publishing. On foldables the layout centers a readable column on the inner screen, and results survive fold/unfold and split-screen.
+The release APK is signed with the debug key so it installs directly; use your own signing config before publishing. To run on an x86_64 emulator, add `"x86_64"` to `abiFilters` in `app/build.gradle.kts`.
 
-CI (`.github/workflows/android.yml`) builds a debug APK on every push and uploads it as an artifact.
+Optional license key: Desert Ant models are free for most apps. If you have a publishable key, enter it in Settings or put `desertant.apiKey=pk_live_...` in `local.properties`.
 
-### Optional license key
+## Notes and limits
 
-Most apps can use the SDK for free without a key. If Desert Ant Labs gave you a publishable key, either enter it in **Settings** or put it in `local.properties` (not committed):
-
-```properties
-desertant.apiKey=pk_live_...
-```
-
-## Notes
-
-- The release APK is about 220 MB: each native model statically links its own Swift runtime (about 56 MB uncompressed, compressed in the APK). Installed, it takes about 600 MB plus the model weights.
-- First use of each model downloads its weights (Voz is about 337 MB, Eye 66 MB, the rest 1–32 MB). Do it on Wi-Fi, or press **Download all** in Settings.
-- Audio decoding uses `MediaExtractor`/`MediaCodec`, so WAV, MP3, AAC/M4A, OGG/Opus, FLAC and the audio of MP4/WebM all work. Input is capped at 10 minutes.
-- Speeds on a phone CPU running LiteRT are slower than Desert Ant's Neural Engine benchmarks. Each result card shows the measured time.
+- **Size:** the APK is about 225 MB, because each native model carries its own runtime. First use downloads the weights: Voz about 337 MB, Eye 66 MB, the others 1–32 MB.
+- **Speed:** a few hundred photos take a few minutes. A meeting takes a fraction of its length to process once the models are on the phone.
+- **Long recordings:** up to 2 hours. Very long recordings may hit the phone's memory limit, and the app says so if that happens.
+- **Transcription languages:** Voz covers 25 European languages. Meetings in other languages are flagged.
 
 ## License
 

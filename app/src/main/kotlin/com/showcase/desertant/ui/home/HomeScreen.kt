@@ -20,7 +20,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.CloudDownload
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -47,7 +47,7 @@ import com.showcase.desertant.core.Pipeline
 import com.showcase.desertant.ui.components.LocalModelHub
 
 @Composable
-fun HomeScreen(onOpen: (String) -> Unit) {
+fun HomeScreen(onOpen: (String) -> Unit, onBack: () -> Unit) {
     val hub = LocalModelHub.current
     val status by hub.status.collectAsState()
     LaunchedEffect(Unit) { hub.refreshAll() }
@@ -55,8 +55,8 @@ fun HomeScreen(onOpen: (String) -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Desert Ant Showcase") },
-                actions = { IconButton(onClick = { onOpen("settings") }) { Icon(Icons.Outlined.Settings, "Settings") } },
+                title = { Text("Model lab") },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
             )
         },
     ) { padding ->
@@ -72,9 +72,9 @@ fun HomeScreen(onOpen: (String) -> Unit) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Little brains, on your phone", style = MaterialTheme.typography.titleLarge)
+                        Text("Every model on its own", style = MaterialTheme.typography.titleLarge)
                         Text(
-                            "Every Desert Ant model that ships for Android, running locally with LiteRT. Weights download once from Hugging Face; after that text, audio and photos never leave the device.",
+                            "Try each Desert Ant model directly — the building blocks behind Photos, Meetings and People. Everything runs on this phone.",
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         val ready = ModelKind.entries.count { status[it] == ModelStatus.Ready }

@@ -24,7 +24,16 @@ object AudioDecoder {
     /** Ten minutes keeps a 48 kHz clip near 110 MB of floats. */
     const val MAX_SECONDS = 600.0
 
-    suspend fun decode(context: Context, uri: Uri, maxSeconds: Double = MAX_SECONDS): AudioClip =
+    /**
+     * [targetRate] resamples while decoding (linear interpolation), so a long
+     * 48 kHz file never sits in memory at full rate. Null keeps the file's rate.
+     */
+    suspend fun decode(
+        context: Context,
+        uri: Uri,
+        maxSeconds: Double = MAX_SECONDS,
+        targetRate: Int? = null,
+    ): AudioClip =
         withContext(Dispatchers.IO) {
             val extractor = MediaExtractor()
             try {
@@ -42,6 +51,7 @@ object AudioDecoder {
 
                 val codec = MediaCodec.createDecoderByType(mime)
                 val out = FloatArrayBuilder()
+                var sink: Sink? = null
                 var truncated = false
                 try {
                     codec.configure(format, null, null, 0)
@@ -78,11 +88,12 @@ object AudioDecoder {
                             if (buffer != null && info.size > 0) {
                                 buffer.position(info.offset)
                                 buffer.limit(info.offset + info.size)
-                                appendMono(buffer.slice().order(ByteOrder.nativeOrder()), encoding, channels, out)
+                                val s = sink ?: Sink(sampleRate, targetRate ?: sampleRate, out).also { sink = it }
+                                appendMono(buffer.slice().order(ByteOrder.nativeOrder()), encoding, channels, s)
                             }
                             codec.releaseOutputBuffer(outIndex, false)
                             if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) outputDone = true
-                            if (out.size >= maxSeconds * sampleRate) {
+                            if (out.size >= maxSeconds * (targetRate ?: sampleRate)) {
                                 truncated = true
                                 outputDone = true
                             }
@@ -94,14 +105,14 @@ object AudioDecoder {
                 }
                 val samples = out.toArray()
                 if (samples.isEmpty()) throw IllegalArgumentException("The audio track decoded to silence.")
-                AudioClip(samples, sampleRate, displayName(context, uri), truncated)
+                AudioClip(samples, targetRate ?: sampleRate, displayName(context, uri), truncated)
             } finally {
                 extractor.release()
             }
         }
 
     /** Average every frame's channels into one sample. */
-    private fun appendMono(buffer: ByteBuffer, encoding: Int, channels: Int, out: FloatArrayBuilder) {
+    private fun appendMono(buffer: ByteBuffer, encoding: Int, channels: Int, out: Sink) {
         val ch = channels.coerceAtLeast(1)
         when (encoding) {
             AudioFormat.ENCODING_PCM_FLOAT -> {
@@ -138,4 +149,25 @@ object AudioDecoder {
         }.getOrNull() ?: uri.lastPathSegment ?: "Audio file"
 
     private const val TIMEOUT_US = 10_000L
+
+    /** Streams samples into [out], resampling from [inRate] to [outRate]. */
+    private class Sink(inRate: Int, outRate: Int, private val out: FloatArrayBuilder) {
+        private val step = inRate.toDouble() / outRate
+        private val passthrough = inRate == outRate
+        private var position = 0.0 // next output position, in input samples
+        private var index = 0L // input samples consumed
+        private var previous = 0f
+
+        fun add(x: Float) {
+            if (passthrough) { out.add(x); return }
+            // Emit every output sample that falls between the previous input and this one.
+            while (position <= index) {
+                val t = (position - (index - 1)).toFloat().coerceIn(0f, 1f)
+                out.add(previous + (x - previous) * t)
+                position += step
+            }
+            previous = x
+            index++
+        }
+    }
 }

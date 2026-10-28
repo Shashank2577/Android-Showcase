@@ -4,6 +4,8 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization")
+    id("com.google.devtools.ksp")
 }
 
 // Optional publishable key for Desert Ant license activation. Most apps can run
@@ -25,11 +27,12 @@ android {
 
     defaultConfig {
         applicationId = "com.showcase.desertant"
-        // The Desert Ant Android SDK requires API 24+.
-        minSdk = 24
+        // Android 11+: system trash for photos (MediaStore.createTrashRequest),
+        // typed foreground services and scoped storage. The SDK itself needs 24+.
+        minSdk = 30
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "2.0"
 
         // arm64 only: every current phone (Galaxy Z Fold 7 included) is arm64-v8a,
         // and dropping x86_64 halves the native libraries each model brings.
@@ -103,4 +106,16 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.navigation:navigation-compose:2.8.5")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
+
+    val room = "2.7.1"
+    implementation("androidx.room:room-runtime:$room")
+    implementation("androidx.room:room-ktx:$room")
+    ksp("androidx.room:room-compiler:$room")
+    implementation("androidx.work:work-runtime-ktx:2.10.1")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-process:2.8.7")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
 }
