@@ -62,9 +62,11 @@ android {
     }
 
     packaging {
-        // Each model brings its own native library; keep them uncompressed so they
-        // can be mapped straight from the APK.
-        jniLibs.useLegacyPackaging = false
+        // Each model's native library statically links its own ~50 MB Swift
+        // runtime, so ten models are ~560 MB uncompressed. Compressing them in the
+        // APK makes it a fraction of that to download and sideload; Android
+        // extracts them once at install time.
+        jniLibs.useLegacyPackaging = true
     }
 }
 

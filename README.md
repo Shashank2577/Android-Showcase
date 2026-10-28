@@ -52,6 +52,7 @@ desertant.apiKey=pk_live_...
 
 ## Notes
 
+- The release APK is about 220 MB: each native model statically links its own Swift runtime (about 56 MB uncompressed, compressed in the APK). Installed, it takes about 600 MB plus the model weights.
 - First use of each model downloads its weights (Voz is about 337 MB, Eye 66 MB, the rest 1–32 MB). Do it on Wi-Fi, or press **Download all** in Settings.
 - Audio decoding uses `MediaExtractor`/`MediaCodec`, so WAV, MP3, AAC/M4A, OGG/Opus, FLAC and the audio of MP4/WebM all work. Input is capped at 10 minutes.
 - Speeds on a phone CPU running LiteRT are slower than Desert Ant's Neural Engine benchmarks. Each result card shows the measured time.
