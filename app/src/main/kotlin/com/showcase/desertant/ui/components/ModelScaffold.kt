@@ -3,6 +3,7 @@
 package com.showcase.desertant.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -44,6 +46,9 @@ import androidx.compose.ui.unit.dp
 import com.showcase.desertant.core.ModelKind
 import com.showcase.desertant.core.ModelStatus
 
+/** Content column width cap: comfortable on a phone, centered on a Fold's inner screen. */
+private val MAX_CONTENT_WIDTH = 720.dp
+
 @Composable
 fun ShowcaseScaffold(
     title: String,
@@ -62,17 +67,26 @@ fun ShowcaseScaffold(
             )
         },
     ) { padding ->
-        Column(
+        // On a wide screen (a Fold's inner display, a tablet, landscape) keep a
+        // readable column centered rather than stretching cards edge to edge.
+        Box(
             Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .imePadding()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .verticalScroll(rememberScrollState()),
+            contentAlignment = Alignment.TopCenter,
         ) {
-            content()
-            Spacer(Modifier.size(24.dp))
+            Column(
+                Modifier
+                    .widthIn(max = MAX_CONTENT_WIDTH)
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                content()
+                Spacer(Modifier.size(24.dp))
+            }
         }
     }
 }

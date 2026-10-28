@@ -16,12 +16,14 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Showcase">
 
-        <!-- configChanges keeps in-flight inference and results across rotation;
+        <!-- configChanges keeps in-flight inference and results across rotation,
+             fold/unfold and split-screen resizing;
              Compose recomposes for the new configuration on its own. -->
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|density|uiMode"
             android:exported="true"
+            android:resizeableActivity="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

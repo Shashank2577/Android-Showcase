@@ -31,8 +31,10 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        // The SDK ships native libraries for these ABIs only.
-        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        // arm64 only: every current phone (Galaxy Z Fold 7 included) is arm64-v8a,
+        // and dropping x86_64 halves the native libraries each model brings.
+        // Add "x86_64" back to run on a desktop emulator.
+        ndk { abiFilters += listOf("arm64-v8a") }
 
         buildConfigField("String", "DESERT_ANT_API_KEY", "\"$desertAntApiKey\"")
         buildConfigField("String", "DESERT_ANT_SDK_VERSION", "\"$desertAntVersion\"")
@@ -41,6 +43,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Signed with the debug key so `assembleRelease` produces an installable
             // APK out of the box. Replace with your own signing config to publish.

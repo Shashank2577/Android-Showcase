@@ -31,11 +31,14 @@ Models that aren't on Android in SDK 4.2.1 (Align, Clips, Title, Uhm, and the cl
 
 ## Build & run
 
-Requirements: Android Studio Ladybug or newer (or JDK 17 + Android SDK 35), and a device or emulator on **arm64-v8a or x86_64**, API 24+.
+Requirements: Android Studio Ladybug or newer (or JDK 17 + Android SDK 35), and an **arm64-v8a** device on API 24+ (any recent phone, e.g. Galaxy Z Fold 7). The build is arm64-only to keep the APK small; add `"x86_64"` to `abiFilters` in `app/build.gradle.kts` to run on a desktop emulator.
 
 ```bash
+./gradlew assembleRelease     # optimized (R8), installable APK: app/build/outputs/apk/release/app-release.apk
 ./gradlew installDebug        # or open the folder in Android Studio and press Run
 ```
+
+The release build is signed with the debug key so it installs directly; use your own signing config before publishing. On foldables the layout centers a readable column on the inner screen, and results survive fold/unfold and split-screen.
 
 CI (`.github/workflows/android.yml`) builds a debug APK on every push and uploads it as an artifact.
 
