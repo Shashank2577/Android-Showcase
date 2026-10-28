@@ -147,13 +147,16 @@ class ModelHub(private val context: Context) {
         }
     }
 
-    /** Release a model's native memory. Its weights stay cached on disk. */
-    fun unload(kind: ModelKind) {
+    /**
+     * Release a model's native memory. Its weights stay cached on disk. Closing
+     * waits for any inference in progress, so it runs off the main thread.
+     */
+    suspend fun unload(kind: ModelKind) {
         val removed = synchronized(this) { instances.remove(kind) }
-        (removed as? AutoCloseable)?.close()
+        withContext(Dispatchers.IO) { (removed as? AutoCloseable)?.close() }
     }
 
-    fun unloadAll() = ModelKind.entries.forEach(::unload)
+    suspend fun unloadAll() = ModelKind.entries.forEach { unload(it) }
 
     /** Bytes the SDK keeps in the app cache for downloaded models. */
     suspend fun cacheBytes(): Long = withContext(Dispatchers.IO) {

@@ -22,6 +22,7 @@ import com.showcase.desertant.core.ModelKind
 import com.showcase.desertant.data.PhotoEntity
 import com.showcase.desertant.data.StoreJson
 import com.showcase.desertant.notify.Notifications
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -37,7 +38,7 @@ class PhotoScanWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val dao = app.db.photos()
         val scope = inputData.getString(KEY_SCOPE)?.let { StoreJson.decodeFromString<PhotoScope>(it) } ?: PhotoScope()
 
-        setForeground(foreground("Preparing photo scan…", 0, 0))
+        promote("Preparing photo scan…", 0, 0)
 
         // Forget photos that were deleted elsewhere.
         val existing = PhotoLibrary.existingIds(applicationContext)
@@ -47,13 +48,13 @@ class PhotoScanWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val known = inScope.chunked(500).flatMap { dao.byIds(it.map(PhotoEntity::mediaId)) }.associateBy { it.mediaId }
         val todo = inScope.filter { p ->
             val k = known[p.mediaId]
-            k == null || k.dateModified != p.dateModified || (k.analysisJson == null && !k.failed)
+            // New, edited, or not analyzed yet (including earlier failures, which get another try).
+            k == null || k.dateModified != p.dateModified || k.analysisJson == null
         }
         if (todo.isEmpty()) return Result.success(workDataOf(KEY_DONE to 0, KEY_TOTAL to 0))
 
-        setForeground(foreground("Getting the photo model ready…", 0, todo.size))
+        promote("Getting the photo model ready…", 0, todo.size)
         app.hub.ensureReady(ModelKind.EYE)
-        val eye = app.hub.eye
 
         val batch = ArrayList<PhotoEntity>()
         todo.forEachIndexed { i, photo ->
@@ -61,11 +62,14 @@ class PhotoScanWorker(context: Context, params: WorkerParameters) : CoroutineWor
             val updated = try {
                 val bitmap = thumbnail(Uri.parse(photo.uri))
                 val analysis = try {
-                    eye.analyze(bitmap, Options(parts = setOf(Part.PHOTO, Part.FACES, Part.SHARPNESS), maxFaces = 8))
+                    // Read the model each time: Settings can unload and recreate it mid-scan.
+                    app.hub.eye.analyze(bitmap, Options(parts = setOf(Part.PHOTO, Part.FACES, Part.SHARPNESS), maxFaces = 8))
                 } finally {
                     bitmap.recycle()
                 }
                 photo.withAnalysis(analysis)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 photo.copy(failed = true, analyzedAt = System.currentTimeMillis())
             }
@@ -74,7 +78,7 @@ class PhotoScanWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 dao.upsert(batch)
                 batch.clear()
                 setProgress(workDataOf(KEY_DONE to i + 1, KEY_TOTAL to todo.size))
-                setForeground(foreground("Analyzed ${i + 1} of ${todo.size} photos", i + 1, todo.size))
+                promote("Analyzed ${i + 1} of ${todo.size} photos", i + 1, todo.size)
             }
         }
         Notifications.done(applicationContext, Notifications.PHOTO_DONE_ID, "Photo scan finished", "${todo.size} photos analyzed on device. Review what you can clean up.")
@@ -86,11 +90,28 @@ class PhotoScanWorker(context: Context, params: WorkerParameters) : CoroutineWor
         if (b.config == Bitmap.Config.ARGB_8888) b else b.copy(Bitmap.Config.ARGB_8888, false).also { b.recycle() }
     }
 
-    private fun foreground(text: String, done: Int, total: Int) = ForegroundInfo(
+    /** Needed for expedited work on Android 11. */
+    override suspend fun getForegroundInfo() = ForegroundInfo(
         Notifications.PHOTO_SCAN_ID,
-        Notifications.progress(applicationContext, "Scanning photos", text, done, total, id),
+        Notifications.progress(applicationContext, "Scanning photos", "Preparing…", 0, 0, id),
         ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
     )
+
+    /** Progress notification; if Android won't allow a foreground start right now, keep scanning without it. */
+    private suspend fun promote(text: String, done: Int, total: Int) {
+        try {
+            setForeground(
+                ForegroundInfo(
+                    Notifications.PHOTO_SCAN_ID,
+                    Notifications.progress(applicationContext, "Scanning photos", text, done, total, id),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+                ),
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+        }
+    }
 
     companion object {
         const val UNIQUE = "photo-scan"
@@ -100,6 +121,7 @@ class PhotoScanWorker(context: Context, params: WorkerParameters) : CoroutineWor
 
         fun start(context: Context, scope: PhotoScope) {
             val request = OneTimeWorkRequestBuilder<PhotoScanWorker>()
+                .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .setInputData(workDataOf(KEY_SCOPE to StoreJson.encodeToString(PhotoScope.serializer(), scope)))
                 .build()
             WorkManager.getInstance(context).enqueueUniqueWork(UNIQUE, ExistingWorkPolicy.REPLACE, request)

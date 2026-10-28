@@ -22,6 +22,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,12 +36,14 @@ import com.showcase.desertant.ui.components.LocalModelHub
 import com.showcase.desertant.ui.components.SectionCard
 import com.showcase.desertant.ui.components.ShowcaseScaffold
 import com.showcase.desertant.ui.components.Stat
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(onBack: () -> Unit, openLab: () -> Unit) {
     val hub = LocalModelHub.current
     val context = LocalContext.current
     val status by hub.status.collectAsState()
+    val scope = rememberCoroutineScope()
     var key by remember { mutableStateOf(hub.apiKey) }
     var saved by remember { mutableStateOf(false) }
     var cacheBytes by remember { mutableLongStateOf(0L) }
@@ -82,7 +85,7 @@ fun SettingsScreen(onBack: () -> Unit, openLab: () -> Unit) {
             Stat("Model cache", Formatter.formatShortFileSize(context, cacheBytes))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { hub.downloadInBackground(*ModelKind.entries.toTypedArray()) }) { Text("Download all") }
-                OutlinedButton(onClick = { hub.unloadAll(); loadedTick++ }) { Text("Unload all") }
+                OutlinedButton(onClick = { scope.launch { hub.unloadAll(); loadedTick++ } }) { Text("Unload all") }
             }
             Text(
                 "Voz alone is 337 MB — prefer Wi-Fi. Unloading frees a model's memory; its files stay cached.",
@@ -111,7 +114,7 @@ fun SettingsScreen(onBack: () -> Unit, openLab: () -> Unit) {
                         s == ModelStatus.NotDownloaded || s is ModelStatus.Failed ->
                             TextButton(onClick = { hub.downloadInBackground(kind) }) { Text("Download") }
                         loaded && !kind.bundled ->
-                            TextButton(onClick = { hub.unload(kind); loadedTick++ }) { Text("Unload") }
+                            TextButton(onClick = { scope.launch { hub.unload(kind); loadedTick++ } }) { Text("Unload") }
                     }
                 }
             }

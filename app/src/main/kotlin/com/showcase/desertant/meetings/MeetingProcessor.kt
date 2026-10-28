@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import ai.desertant.voz.Transcription
 import ai.desertant.voz.Word
+import ai.desertant.who.Turn
 import com.showcase.desertant.app
 import com.showcase.desertant.audio.AudioDecoder
 import com.showcase.desertant.core.ModelKind
@@ -40,39 +41,60 @@ class MeetingProcessor(private val context: Context) {
             report(text)
         }
 
-        step("Reading the recording…")
-        val audio = AudioDecoder.decode(context, Uri.fromFile(File(meeting.audioPath)), MAX_SECONDS, targetRate = RATE)
-        val samples = audio.samples
+        val uri = Uri.fromFile(File(meeting.audioPath))
+        val total = AudioDecoder.durationSec(context, uri).takeIf { it > 0 } ?: meeting.durationSec
         val rate = RATE.toDouble()
-
-        step("Detecting the language…")
         hub.ensureReady(ModelKind.EAR)
-        // Ear looks at up to three 30 s windows; handing it the first few minutes
-        // avoids copying an hour of audio into its input.
-        val language = hub.ear.identify(samples.copyOfRange(0, minOf(samples.size, RATE * 240)), rate)
-        val lang = language.language
-        val supported = lang == null || lang in VOZ_LANGUAGES
-
-        step("Transcribing (getting the speech model ready the first time takes a while)…")
+        step("Getting the speech models ready (the first time downloads them)…")
         hub.ensureReady(ModelKind.VOZ)
-        // Long recordings go in ~10 minute pieces cut at pauses, so the SDK's input
-        // copy stays small; word times are shifted back onto the full timeline.
-        val pieces = quietChunks(samples, RATE)
+        hub.ensureReady(ModelKind.WHO)
+
+        // Work through the recording ~10 minutes at a time, cut at pauses, so memory
+        // stays the same for a 5-minute call and a 2-hour meeting. Speakers found in
+        // each window are linked to the same person across windows by voice.
+        var language: ai.desertant.ear.Detection? = null
         val words = ArrayList<Word>()
         val text = StringBuilder()
-        pieces.forEachIndexed { i, (from, to) ->
-            if (pieces.size > 1) step("Transcribing part ${i + 1} of ${pieces.size}…")
-            val offset = from.toDouble() / RATE
-            val part = hub.voz.transcribe(samples.copyOfRange(from, to), rate)
-            part.words.forEach { words += Word(it.text, it.start + offset, it.end + offset) }
-            if (part.text.isNotBlank()) text.append(part.text.trim()).append(' ')
-        }
-        val transcript = Transcription(text.toString().trim(), words, audio.durationSec)
+        val turns = ArrayList<Turn>()
+        val voices = ArrayList<VoiceSignature?>() // per global speaker
+        var start = 0.0
+        var window = 0
+        val windows = kotlin.math.ceil(total / WINDOW_SEC).toInt().coerceAtLeast(1)
+        while (start < total - 0.5 && start < MAX_SECONDS) {
+            window++
+            val label = if (windows > 1) " (part $window of ~$windows)" else ""
+            step("Reading the recording$label…")
+            val clip = AudioDecoder.decode(context, uri, maxSeconds = WINDOW_SEC + TAIL_SEC, targetRate = RATE, startSec = start)
+            val last = start + clip.durationSec >= total - 0.5 || clip.durationSec < WINDOW_SEC
+            val cut = if (last) clip.samples.size
+                else quietCut(clip.samples, RATE, (WINDOW_SEC * RATE).toInt(), (TAIL_SEC * RATE).toInt())
+            val piece = if (cut == clip.samples.size) clip.samples else clip.samples.copyOfRange(0, cut)
+            if (piece.size < RATE / 2) break
 
-        step("Working out who spoke when…")
-        hub.ensureReady(ModelKind.WHO)
-        val diarization = hub.who.diarize(samples, rate)
-        val turns = diarization.turns
+            if (language == null) {
+                step("Detecting the language…")
+                // Ear looks at up to three 30 s windows of the start.
+                language = hub.ear.identify(piece.copyOfRange(0, minOf(piece.size, RATE * 240)), rate)
+            }
+
+            step("Transcribing$label…")
+            val part = hub.voz.transcribe(piece, rate)
+            part.words.forEach { words += Word(it.text, it.start + start, it.end + start) }
+            if (part.text.isNotBlank()) text.append(part.text.trim()).append(' ')
+
+            step("Working out who spoke when$label…")
+            val local = hub.who.diarize(piece, rate)
+            val mapping = linkSpeakers(local.turns, piece, voices)
+            local.turns.forEach { t -> turns += Turn(mapping.getValue(t.speaker), t.start + start, t.end + start) }
+
+            start += piece.size.toDouble() / RATE
+            if (last) break
+        }
+        val lang = language?.language
+        val supported = lang == null || lang in VOZ_LANGUAGES
+        val transcript = Transcription(text.toString().trim(), words, start)
+        val durationSec = start
+        val speakerCount = voices.size
         val utterances = utterances(transcript.words, turns)
         val sentences = sentences(utterances)
 
@@ -91,10 +113,12 @@ class MeetingProcessor(private val context: Context) {
         val followUps = followUps(sentences)
 
         step("Recognizing voices…")
-        val speakerIndices = (0 until diarization.speakerCount).filter { s -> turns.any { it.speaker == s } }
+        val speakerIndices = (0 until speakerCount).filter { s -> turns.any { it.speaker == s } }
         val profiles = db.profiles().allNow()
-        val signatures = speakerIndices.associateWith { s -> voiceOf(samples, turns.filter { it.speaker == s }) }
+        val signatures = speakerIndices.associateWith { voices[it] }
         val matcher = ProfileMatcher(profiles, signatures.values.filterNotNull())
+        // On "Process again", people the user already confirmed here are relinked when their voice matches.
+        val confirmed = db.speakers().forMeetingNow(meetingId).mapNotNull { it.profileId }.toSet()
         val speakers = speakerIndices.map { s ->
             val said = utterances.filter { it.speaker == s }
             val text = said.joinToString(" ") { it.text }
@@ -103,11 +127,13 @@ class MeetingProcessor(private val context: Context) {
             } else emptyList()
             val signature = signatures[s]
             val match = signature?.let { matcher.best(it) }
+            val relink = match?.first?.takeIf { it in confirmed }
             MeetingSpeakerEntity(
                 meetingId = meetingId,
                 index = s,
-                suggestedProfileId = match?.first,
-                suggestionScore = match?.second,
+                profileId = relink,
+                suggestedProfileId = if (relink == null) match?.first else null,
+                suggestionScore = if (relink == null) match?.second else null,
                 talkSec = turns.filter { it.speaker == s }.sumOf { it.end - it.start },
                 words = text.split(' ').count { it.isNotBlank() },
                 signatureJson = signature?.let { StoreJson.encodeToString(VoiceSignature.serializer(), it) },
@@ -123,7 +149,7 @@ class MeetingProcessor(private val context: Context) {
         db.meetings().update(
             meeting.copy(
                 title = title,
-                durationSec = audio.durationSec,
+                durationSec = durationSec,
                 status = MeetingStatus.READY,
                 progress = null,
                 error = null,
@@ -139,8 +165,36 @@ class MeetingProcessor(private val context: Context) {
         )
     }
 
-    /** Signature from up to 90 s of a speaker's own turns. */
-    private suspend fun voiceOf(samples: FloatArray, turns: List<ai.desertant.who.Turn>): VoiceSignature? =
+    /**
+     * Map this window's speakers onto the meeting's speakers: each local voice
+     * joins the most similar known voice not already taken in this window, or
+     * becomes a new speaker. [voices] grows and is refined as it goes.
+     */
+    private suspend fun linkSpeakers(local: List<Turn>, piece: FloatArray, voices: MutableList<VoiceSignature?>): Map<Int, Int> {
+        val ids = local.map { it.speaker }.distinct().sortedByDescending { s -> local.filter { it.speaker == s }.sumOf { it.end - it.start } }
+        val mapping = HashMap<Int, Int>()
+        val taken = HashSet<Int>()
+        val center = VoiceSignatures.center(voices.filterNotNull())
+        for (id in ids) {
+            val sig = voiceOf(piece, local.filter { it.speaker == id })
+            val best = if (sig == null) null else voices.indices
+                .filter { it !in taken && voices[it] != null }
+                .map { it to VoiceSignatures.similarity(sig, voices[it]!!, center) }
+                .maxByOrNull { it.second }
+                ?.takeIf { it.second >= LINK_THRESHOLD }
+            val global = when {
+                best != null -> best.first.also { voices[it] = VoiceSignatures.merge(voices[it], 1, sig!!) }
+                // A new voice, or too little speech to fingerprint: its own speaker.
+                else -> voices.size.also { voices += sig }
+            }
+            taken += global
+            mapping[id] = global
+        }
+        return mapping
+    }
+
+    /** Signature from up to 90 s of a speaker's own turns within [samples]. */
+    private suspend fun voiceOf(samples: FloatArray, turns: List<Turn>): VoiceSignature? =
         withContext(Dispatchers.Default) {
             val pieces = ArrayList<FloatArray>()
             var total = 0
@@ -170,8 +224,13 @@ class MeetingProcessor(private val context: Context) {
 
     companion object {
         const val RATE = 16_000
-        /** Two hours at 16 kHz is ~460 MB of floats; longer recordings are cut. */
-        const val MAX_SECONDS = 2 * 60 * 60.0
+        /** Processing stops after three hours. */
+        const val MAX_SECONDS = 3 * 60 * 60.0
+        /** Each window is ~10 minutes (~38 MB of samples), plus slack to cut at a pause. */
+        private const val WINDOW_SEC = 600.0
+        private const val TAIL_SEC = 15.0
+        /** Voices this alike across windows are the same speaker. */
+        private const val LINK_THRESHOLD = 0.68
         private const val GIST_CHARS = 6000
 
         val UTTERANCES = kotlinx.serialization.builtins.ListSerializer(Utterance.serializer())

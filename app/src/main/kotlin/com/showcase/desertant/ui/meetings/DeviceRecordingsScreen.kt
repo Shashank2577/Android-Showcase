@@ -5,6 +5,7 @@ package com.showcase.desertant.ui.meetings
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -70,7 +71,11 @@ fun DeviceRecordingsScreen(onBack: () -> Unit) {
     LaunchedEffect(granted, reload) { if (granted) items = MeetingImporter.deviceRecordings(context) }
 
     fun import(r: ExternalRecording) = scope.launch {
-        MeetingImporter.import(context, r.uri, if (r.isCall) MeetingSource.CALL else MeetingSource.IMPORTED, r.name, r.dateMillis)
+        try {
+            MeetingImporter.import(context, r.uri, if (r.isCall) MeetingSource.CALL else MeetingSource.IMPORTED, r.name, r.dateMillis)
+        } catch (e: Exception) {
+            Toast.makeText(context, "Couldn't import ${r.name}: ${e.message ?: "unreadable"}", Toast.LENGTH_LONG).show()
+        }
         reload++
     }
 

@@ -2,6 +2,7 @@
 
 package com.showcase.desertant.ui.meetings
 
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -89,8 +90,12 @@ fun MeetingsHome(open: (String) -> Unit) {
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
-            val id = MeetingImporter.import(context, uri, MeetingSource.IMPORTED)
-            if (wide) selected = id
+            try {
+                val id = MeetingImporter.import(context, uri, MeetingSource.IMPORTED)
+                if (wide) selected = id
+            } catch (e: Exception) {
+                Toast.makeText(context, "Couldn't import that file: ${e.message ?: "unreadable"}", Toast.LENGTH_LONG).show()
+            }
         }
     }
 

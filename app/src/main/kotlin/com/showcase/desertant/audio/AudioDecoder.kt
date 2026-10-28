@@ -33,6 +33,8 @@ object AudioDecoder {
         uri: Uri,
         maxSeconds: Double = MAX_SECONDS,
         targetRate: Int? = null,
+        /** Decode from this point on (seconds), for processing a long file window by window. */
+        startSec: Double = 0.0,
     ): AudioClip =
         withContext(Dispatchers.IO) {
             val extractor = MediaExtractor()
@@ -42,6 +44,8 @@ object AudioDecoder {
                     extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true
                 } ?: throw IllegalArgumentException("This file has no audio track.")
                 extractor.selectTrack(track)
+                val startUs = (startSec * 1_000_000).toLong()
+                if (startUs > 0) extractor.seekTo(startUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
                 val format = extractor.getTrackFormat(track)
                 val mime = format.getString(MediaFormat.KEY_MIME)!!
 
@@ -88,7 +92,11 @@ object AudioDecoder {
                             if (buffer != null && info.size > 0) {
                                 buffer.position(info.offset)
                                 buffer.limit(info.offset + info.size)
-                                val s = sink ?: Sink(sampleRate, targetRate ?: sampleRate, out).also { sink = it }
+                                // The seek lands on an earlier sync frame; drop audio before startSec.
+                                val s = sink ?: Sink(sampleRate, targetRate ?: sampleRate, out).also {
+                                    it.skip = ((startUs - info.presentationTimeUs).coerceAtLeast(0) * sampleRate / 1_000_000)
+                                    sink = it
+                                }
                                 appendMono(buffer.slice().order(ByteOrder.nativeOrder()), encoding, channels, s)
                             }
                             codec.releaseOutputBuffer(outIndex, false)
@@ -110,6 +118,22 @@ object AudioDecoder {
                 extractor.release()
             }
         }
+
+    /** Length of [uri]'s audio track in seconds, from its container; 0 if unknown. */
+    suspend fun durationSec(context: Context, uri: Uri): Double = withContext(Dispatchers.IO) {
+        val extractor = MediaExtractor()
+        try {
+            extractor.setDataSource(context, uri, null)
+            (0 until extractor.trackCount).map { extractor.getTrackFormat(it) }
+                .firstOrNull { it.getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true }
+                ?.takeIf { it.containsKey(MediaFormat.KEY_DURATION) }
+                ?.getLong(MediaFormat.KEY_DURATION)?.div(1_000_000.0) ?: 0.0
+        } catch (e: Exception) {
+            0.0
+        } finally {
+            extractor.release()
+        }
+    }
 
     /** Average every frame's channels into one sample. */
     private fun appendMono(buffer: ByteBuffer, encoding: Int, channels: Int, out: Sink) {
@@ -158,7 +182,11 @@ object AudioDecoder {
         private var index = 0L // input samples consumed
         private var previous = 0f
 
+        /** Input frames still to drop before output starts. */
+        var skip = 0L
+
         fun add(x: Float) {
+            if (skip > 0) { skip--; return }
             if (passthrough) { out.add(x); return }
             // Emit every output sample that falls between the previous input and this one.
             while (position <= index) {

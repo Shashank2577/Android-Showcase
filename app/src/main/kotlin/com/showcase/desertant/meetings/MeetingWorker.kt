@@ -6,6 +6,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
 import androidx.work.ForegroundInfo
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
@@ -14,6 +15,8 @@ import com.showcase.desertant.data.MeetingStatus
 import com.showcase.desertant.notify.Notifications
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /** Processes one meeting in the background, so the user can lock the phone and walk away. */
@@ -22,45 +25,68 @@ class MeetingWorker(context: Context, params: WorkerParameters) : CoroutineWorke
     override suspend fun doWork(): Result {
         val id = inputData.getLong(KEY_ID, -1)
         val dao = applicationContext.app.db.meetings()
-        val meeting = dao.get(id) ?: return Result.success()
-        setForeground(info("Starting…"))
-        return try {
-            MeetingProcessor(applicationContext).process(id) { setForeground(info(it)) }
-            Notifications.done(
-                applicationContext, Notifications.MEETING_DONE_ID + id.toInt(),
-                "Meeting notes ready", "Transcript, speakers and highlights for “${dao.get(id)?.title ?: meeting.title}” are ready.",
-                route = "meeting/$id",
-            )
+        if (dao.get(id) == null) return Result.success()
+        // One meeting at a time: each needs the speech models' full memory. Each
+        // meeting is its own work, so one failure never blocks the others.
+        return oneAtATime.withLock {
+            try {
+                promote("Starting…")
+                MeetingProcessor(applicationContext).process(id) { promote(it) }
+                Notifications.done(
+                    applicationContext, Notifications.MEETING_DONE_ID + id.toInt(),
+                    "Meeting notes ready", "Transcript, speakers and highlights for “${dao.get(id)?.title ?: "your meeting"}” are ready.",
+                    route = "meeting/$id",
+                )
+            } catch (e: CancellationException) {
+                withContext(NonCancellable) {
+                    dao.setStatus(id, MeetingStatus.FAILED, null, "Stopped before it finished. Tap Try again to continue.")
+                }
+                throw e
+            } catch (e: OutOfMemoryError) {
+                dao.setStatus(id, MeetingStatus.FAILED, null, "The phone ran out of memory while processing this recording.")
+            } catch (e: Throwable) {
+                dao.setStatus(id, MeetingStatus.FAILED, null, e.message ?: e.javaClass.simpleName)
+            }
+            // The failure is recorded on the meeting, with a retry button; the work itself is done.
             Result.success()
-        } catch (e: CancellationException) {
-            withContext(NonCancellable) { dao.setStatus(id, MeetingStatus.QUEUED, "Paused — will resume", null) }
-            throw e
-        } catch (e: OutOfMemoryError) {
-            dao.setStatus(id, MeetingStatus.FAILED, null, "This recording is too long for the phone's memory. Try a recording under an hour.")
-            Result.failure()
-        } catch (e: Throwable) {
-            dao.setStatus(id, MeetingStatus.FAILED, null, e.message ?: e.javaClass.simpleName)
-            Result.failure()
         }
     }
 
-    private fun info(text: String) = ForegroundInfo(
+    /** Needed for expedited work on Android 11. */
+    override suspend fun getForegroundInfo() = ForegroundInfo(
         Notifications.MEETING_WORK_ID,
-        Notifications.progress(applicationContext, "Preparing meeting notes", text, 0, 0, id),
+        Notifications.progress(applicationContext, "Preparing meeting notes", "Starting…", 0, 0, id),
         ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
     )
 
+    /** Show progress as a foreground notification; if Android won't allow that right now, carry on without it. */
+    private suspend fun promote(text: String) {
+        try {
+            setForeground(
+                ForegroundInfo(
+                    Notifications.MEETING_WORK_ID,
+                    Notifications.progress(applicationContext, "Preparing meeting notes", text, 0, 0, id),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+                ),
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Background-start restrictions (ForegroundServiceStartNotAllowedException).
+        }
+    }
+
     companion object {
         private const val KEY_ID = "meeting"
-        private const val CHAIN = "meetings"
+        private val oneAtATime = Mutex()
 
-        /** Meetings are processed one at a time: each needs the speech models' full memory. */
         fun enqueue(context: Context, meetingId: Long) {
             val request = OneTimeWorkRequestBuilder<MeetingWorker>()
                 .setInputData(workDataOf(KEY_ID to meetingId))
-                .addTag("meeting-$meetingId")
+                // Expedited work may start a foreground service even from the background.
+                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .build()
-            WorkManager.getInstance(context).enqueueUniqueWork(CHAIN, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+            WorkManager.getInstance(context).enqueueUniqueWork("meeting-$meetingId", ExistingWorkPolicy.REPLACE, request)
         }
     }
 }

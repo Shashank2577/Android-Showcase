@@ -83,6 +83,22 @@ suspend fun highlights(
     return buckets.values.mapNotNull { b -> b.maxByOrNull { it.second }?.first }.sortedBy { it.start }
 }
 
+/** The quietest 100 ms point within ±[searchSamples] of [target], as a sample index. */
+fun quietCut(samples: FloatArray, rate: Int, target: Int, searchSamples: Int, notBefore: Int = 0): Int {
+    val window = rate / 10
+    var best = target.coerceIn(0, samples.size)
+    var bestEnergy = Double.MAX_VALUE
+    var at = (target - searchSamples).coerceAtLeast(notBefore + window)
+    val end = (target + searchSamples).coerceAtMost(samples.size - window)
+    while (at < end) {
+        var e = 0.0
+        for (i in at until at + window) e += samples[i] * samples[i]
+        if (e < bestEnergy) { bestEnergy = e; best = at + window / 2 }
+        at += window / 2
+    }
+    return best
+}
+
 /**
  * Split [samples] into pieces of about [targetSec], cutting at the quietest
  * 100 ms within ±[searchSec] of each boundary so a cut rarely lands mid-word.
@@ -91,21 +107,11 @@ suspend fun highlights(
 fun quietChunks(samples: FloatArray, rate: Int, targetSec: Double = 600.0, searchSec: Double = 8.0): List<Pair<Int, Int>> {
     val target = (targetSec * rate).toInt()
     if (samples.size <= target * 1.25) return listOf(0 to samples.size)
-    val window = rate / 10
     val search = (searchSec * rate).toInt()
     val cuts = mutableListOf(0)
     var next = target
     while (next < samples.size - target / 4) {
-        var best = next
-        var bestEnergy = Double.MAX_VALUE
-        var at = (next - search).coerceAtLeast(cuts.last() + window)
-        val end = (next + search).coerceAtMost(samples.size - window)
-        while (at < end) {
-            var e = 0.0
-            for (i in at until at + window) e += samples[i] * samples[i]
-            if (e < bestEnergy) { bestEnergy = e; best = at + window / 2 }
-            at += window / 2
-        }
+        val best = quietCut(samples, rate, next, search, notBefore = cuts.last())
         cuts += best
         next = best + target
     }

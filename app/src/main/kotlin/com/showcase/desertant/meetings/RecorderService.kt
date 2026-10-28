@@ -21,7 +21,9 @@ import com.showcase.desertant.data.MeetingStatus
 import com.showcase.desertant.notify.Notifications
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -30,6 +32,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 sealed interface RecorderState {
@@ -51,10 +54,10 @@ sealed interface RecorderState {
 class RecorderService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var recorder: MediaRecorder? = null
-    private var meetingId = -1L
+    @Volatile private var meetingId = -1L
     private var file: File? = null
     private var ticker: Job? = null
-    private var insert: Job? = null
+    private var insert: Deferred<Long>? = null
     private var startedAt = 0L
     private var pausedTotal = 0L
     private var pausedAt = 0L
@@ -100,8 +103,10 @@ class RecorderService : Service() {
         recorder = r
         startedAt = SystemClock.elapsedRealtime()
         pausedTotal = 0
-        insert = scope.launch {
-            meetingId = app.db.meetings().insert(
+        meetingId = -1
+        // On the app's scope so the row exists even if the service is torn down early.
+        insert = app.scope.async {
+            val id = app.db.meetings().insert(
                 MeetingEntity(
                     title = title?.takeIf { it.isNotBlank() } ?: "Recording…",
                     titleEdited = !title.isNullOrBlank(),
@@ -111,7 +116,9 @@ class RecorderService : Service() {
                     status = MeetingStatus.RECORDING,
                 ),
             )
-            publish()
+            meetingId = id
+            withContext(Dispatchers.Main) { publish() }
+            id
         }
         ticker = scope.launch {
             var tick = 0
@@ -160,22 +167,26 @@ class RecorderService : Service() {
         r.release()
         recorder = null
         _state.value = RecorderState.Idle
-        scope.launch {
-            insert?.join()
-            val id = meetingId
-            val dao = app.db.meetings()
+        // Capture this take before a new recording could reuse the fields, and
+        // finish saving on the app's scope so it completes even if the service dies.
+        val pendingInsert = insert
+        val take = file
+        val context = applicationContext
+        context.app.scope.launch {
+            val id = pendingInsert?.await() ?: return@launch
+            val dao = context.app.db.meetings()
             dao.get(id)?.let { m ->
                 if (duration < 2) {
                     dao.delete(id)
-                    file?.delete()
+                    take?.delete()
                 } else {
                     dao.update(m.copy(durationSec = duration, status = MeetingStatus.QUEUED, progress = "Waiting to be processed"))
-                    MeetingWorker.enqueue(this@RecorderService, id)
+                    MeetingWorker.enqueue(context, id)
                 }
             }
-            ServiceCompat.stopForeground(this@RecorderService, ServiceCompat.STOP_FOREGROUND_REMOVE)
-            stopSelf()
         }
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        stopSelf()
     }
 
     private fun updateNotification() {
