@@ -26,6 +26,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** A model was needed while "never go online" is on. */
+class OfflineException(kind: ModelKind) :
+    Exception("${kind.title} isn't on this phone yet, and \"never go online\" is on. Turn it off on the privacy page to download it once.")
+
 sealed interface ModelStatus {
     data object Unknown : ModelStatus
     data object NotDownloaded : ModelStatus
@@ -44,7 +48,7 @@ sealed interface ModelStatus {
  * closes a model to release its native memory; the next access recreates it
  * from the on-disk cache without downloading again.
  */
-class ModelHub(private val context: Context) {
+class ModelHub(private val context: Context, private val offline: () -> Boolean = { false }) {
 
     private val instances = HashMap<ModelKind, Any>()
     private val inflight = HashMap<ModelKind, Deferred<Unit>>()
@@ -125,6 +129,11 @@ class ModelHub(private val context: Context) {
         if (downloaded) {
             set(kind, ModelStatus.Ready)
             return
+        }
+        // "Never go online" is a promise: with it on, a missing model stays missing.
+        if (offline()) {
+            set(kind, ModelStatus.NotDownloaded)
+            throw OfflineException(kind)
         }
         set(kind, ModelStatus.Downloading)
         try {

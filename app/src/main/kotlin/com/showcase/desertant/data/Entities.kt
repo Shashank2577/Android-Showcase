@@ -32,6 +32,10 @@ data class PhotoEntity(
     val failed: Boolean = false,
     /** The user chose to keep it; don't suggest deleting it again. */
     val kept: Boolean = false,
+    /** Moderator's verdict, checked only for photos Eye thought might be intimate; null if not checked. */
+    val intimate: Boolean? = null,
+    /** The user said this isn't private; the sweep leaves it alone. */
+    val privateDismissed: Boolean = false,
 )
 
 enum class MeetingSource { RECORDED, IMPORTED, CALL }

@@ -1,58 +1,31 @@
-@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@file:OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 
 package com.showcase.desertant.ui.photos
 
 import android.app.Activity
 import android.net.Uri
 import android.provider.MediaStore
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.Circle
-import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material.icons.outlined.TaskAlt
-import androidx.compose.material3.BottomAppBar
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -62,27 +35,40 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.showcase.desertant.app
 import com.showcase.desertant.data.PhotoEntity
 import com.showcase.desertant.photos.SimilarGroup
-import com.showcase.desertant.ui.common.EmptyState
 import com.showcase.desertant.ui.common.Thumbnail
 import com.showcase.desertant.ui.common.formatBytes
 import com.showcase.desertant.ui.common.relativeDay
+import com.showcase.desertant.ui.hand.Doodle
+import com.showcase.desertant.ui.hand.DoodleIcon
+import com.showcase.desertant.ui.hand.HandEmpty
+import com.showcase.desertant.ui.hand.HandLink
+import com.showcase.desertant.ui.hand.HandPage
+import com.showcase.desertant.ui.hand.InkButton
+import com.showcase.desertant.ui.hand.MarkedText
+import com.showcase.desertant.ui.hand.Meta
+import com.showcase.desertant.ui.hand.Snapshot
+import com.showcase.desertant.ui.theme.Hand
+import com.showcase.desertant.ui.theme.burrow
 import kotlinx.coroutines.launch
 
+private val TILTS = listOf(-2.5f, 1.8f, -1.2f, 2.6f, -1.8f, 1.2f)
+
+/** Review one kind of cleanup: moments (keep the best), throwaway shots, or screenshots. */
 @Composable
 fun PhotoReviewScreen(kind: ReviewKind, onBack: () -> Unit) {
     val context = LocalContext.current
     val dao = context.app.db.photos()
     val scope = rememberCoroutineScope()
-    val snackbar = remember { SnackbarHostState() }
     val insights by context.app.photoInsights.collectAsStateWithLifecycle()
     val i = insights
 
@@ -112,7 +98,7 @@ fun PhotoReviewScreen(kind: ReviewKind, onBack: () -> Unit) {
             scope.launch {
                 dao.delete(removed.map { it.mediaId })
                 removed.forEach { overrides.remove(it.mediaId) }
-                snackbar.showSnackbar("Moved ${removed.size} photos to the trash — recoverable for 30 days.")
+                Toast.makeText(context, "Let go of ${removed.size} photos. They're in the trash for 30 days.", Toast.LENGTH_LONG).show()
             }
         }
         pending = emptyList()
@@ -125,84 +111,59 @@ fun PhotoReviewScreen(kind: ReviewKind, onBack: () -> Unit) {
         trash.launch(IntentSenderRequest.Builder(request.intentSender).build())
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(kind.title) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
-                actions = {
-                    if (kind != ReviewKind.SIMILAR && list.isNotEmpty()) {
-                        val all = list.all(::selected)
-                        TextButton(onClick = { list.forEach { overrides[it.mediaId] = !all } }) { Text(if (all) "Select none" else "Select all") }
-                    }
-                },
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbar) },
-        bottomBar = {
-            if (chosen.isNotEmpty()) {
-                BottomAppBar {
-                    Column(Modifier.weight(1f).padding(start = 16.dp)) {
-                        Text("${chosen.size} selected", style = MaterialTheme.typography.titleSmall)
-                        Text(formatBytes(context, chosen.sumOf { it.sizeBytes }), style = MaterialTheme.typography.bodySmall)
-                    }
-                    Button(
-                        onClick = { moveToTrash(chosen) },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                        modifier = Modifier.padding(end = 16.dp),
-                    ) {
-                        Icon(Icons.Outlined.DeleteOutline, null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("Move to trash")
-                    }
+    HandPage(
+        onBack = onBack,
+        bottom = if (chosen.isEmpty()) null else ({
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("${chosen.size} to let go", style = Hand.door, color = burrow.ink)
+                    Meta("${formatBytes(context, chosen.sumOf { it.sizeBytes })} · recoverable for 30 days")
                 }
+                InkButton("let them go", { moveToTrash(chosen) })
             }
-        },
-    ) { padding ->
+        }),
+    ) {
         when {
             i == null -> Unit
             kind == ReviewKind.SIMILAR && groups.isEmpty() || kind != ReviewKind.SIMILAR && list.isEmpty() ->
-                EmptyState(Icons.Outlined.TaskAlt, "All tidy", "Nothing left to review here.", Modifier.padding(padding))
-            kind == ReviewKind.SIMILAR -> LazyColumn(
-                Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                item {
-                    Text(
-                        "Each set is one moment. The best shot is starred and kept; the rest are selected for the trash. Tap to change, hold to look closer.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                items(groups, key = { it.key }) { g ->
-                    GroupCard(
+                HandEmpty("all tidy.", "Nothing left to look at here.", doodle = Doodle.TICK)
+            kind == ReviewKind.SIMILAR -> {
+                val n = groups.size.toString()
+                MarkedText("keep the best of $n moments", mark = n, style = Hand.headline.copy(fontSize = 40.sp, lineHeight = 42.sp))
+                Meta("Burrow starred one shot in each — eyes open, sharpest, best faces. Tap any photo to change; hold to look closer.", Modifier.padding(top = 6.dp))
+                Spacer(Modifier.height(20.dp))
+                groups.forEach { g ->
+                    Moment(
                         group = g,
                         selected = ::selected,
                         onToggle = { p -> overrides[p.mediaId] = !selected(p) },
                         onPreview = { preview = it },
                         onKeepAll = {
+                            g.extras.forEach { overrides.remove(it.mediaId) }
                             scope.launch { dao.markKept(g.extras.map { it.mediaId }) }
                         },
                     )
+                    Spacer(Modifier.height(28.dp))
                 }
             }
-            else -> LazyVerticalGrid(
-                columns = GridCells.Adaptive(116.dp),
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                items(list, key = { it.mediaId }) { p ->
-                    Column {
-                        SelectableTile(p, selected(p), best = false, onToggle = { overrides[p.mediaId] = !selected(p) }, onPreview = { preview = p })
-                        Text(
-                            p.junkReason ?: relativeDay(p.dateTaken),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                        )
+            else -> {
+                Text(kind.title, style = Hand.headline, color = burrow.ink)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Meta(
+                        if (kind == ReviewKind.JUNK) "Blurry, accidental and empty frames. All picked; tap to keep one."
+                        else "Tickets, maps and codes you probably don't need. Tap the ones to let go.",
+                        Modifier.weight(1f),
+                    )
+                    val all = list.all(::selected)
+                    HandLink(if (all) "none" else "all", { list.forEach { overrides[it.mediaId] = !all } })
+                }
+                Spacer(Modifier.height(16.dp))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    list.forEachIndexed { n, p ->
+                        Column(Modifier.width(96.dp)) {
+                            Tile(p, selected(p), best = false, tilt = TILTS[n % TILTS.size], size = 88.dp, onToggle = { overrides[p.mediaId] = !selected(p) }, onPreview = { preview = p })
+                            Meta(p.junkReason?.lowercase() ?: relativeDay(p.dateTaken), Modifier.padding(top = 6.dp), maxLines = 1)
+                        }
                     }
                 }
             }
@@ -212,7 +173,7 @@ fun PhotoReviewScreen(kind: ReviewKind, onBack: () -> Unit) {
 }
 
 @Composable
-private fun GroupCard(
+private fun Moment(
     group: SimilarGroup,
     selected: (PhotoEntity) -> Boolean,
     onToggle: (PhotoEntity) -> Unit,
@@ -220,57 +181,35 @@ private fun GroupCard(
     onKeepAll: () -> Unit,
 ) {
     val context = LocalContext.current
-    ElevatedCard {
-        Column(Modifier.padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("${group.photos.size} similar · ${relativeDay(group.best.dateTaken)}", style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        "★ ${group.bestReason} · frees ${formatBytes(context, group.extras.filter(selected).sumOf { it.sizeBytes })}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                TextButton(onClick = onKeepAll) { Text("Keep all") }
-            }
-            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(group.photos, key = { it.mediaId }) { p ->
-                    Box(Modifier.size(132.dp)) {
-                        SelectableTile(p, selected(p), best = p.mediaId == group.best.mediaId, onToggle = { onToggle(p) }, onPreview = { onPreview(p) })
-                    }
-                }
-            }
+    Row(verticalAlignment = Alignment.Bottom) {
+        Column(Modifier.weight(1f)) {
+            Text("${relativeDay(group.best.dateTaken).lowercase()} — ${group.photos.size} shots", style = Hand.door, color = burrow.ink)
+            Meta("keep: ${group.bestReason.lowercase()} · frees ${formatBytes(context, group.extras.filter(selected).sumOf { it.sizeBytes })}")
+        }
+        HandLink("keep all", onKeepAll)
+    }
+    Spacer(Modifier.height(12.dp))
+    Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        group.photos.forEachIndexed { n, p ->
+            val best = p.mediaId == group.best.mediaId
+            Tile(p, selected(p), best, TILTS[n % TILTS.size], if (best) 128.dp else 96.dp, { onToggle(p) }, { onPreview(p) })
         }
     }
 }
 
+/** A snapshot: faded with a red cross when it's going, starred when it's the keeper. */
 @Composable
-private fun SelectableTile(p: PhotoEntity, selected: Boolean, best: Boolean, onToggle: () -> Unit, onPreview: () -> Unit) {
-    val shape = RoundedCornerShape(12.dp)
+private fun Tile(p: PhotoEntity, selected: Boolean, best: Boolean, tilt: Float, size: Dp, onToggle: () -> Unit, onPreview: () -> Unit) {
     Box(
         Modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
-            .clip(shape)
-            .then(if (selected) Modifier.border(3.dp, MaterialTheme.colorScheme.error, shape) else if (best) Modifier.border(3.dp, Color(0xFFFFC107), shape) else Modifier)
-            .combinedClickable(onClick = onToggle, onLongClick = onPreview),
+            .combinedClickable(onClick = onToggle, onLongClick = onPreview)
+            .semantics { contentDescription = if (selected) "Letting go" else if (best) "Best shot, keeping" else "Keeping" },
     ) {
-        Thumbnail(p.uri, Modifier.fillMaxSize())
-        if (selected) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
-        Icon(
-            if (selected) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
-            if (selected) "Selected for trash" else "Keep",
-            tint = if (selected) MaterialTheme.colorScheme.error else Color.White,
-            modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).background(Color.Black.copy(alpha = 0.25f), CircleShape),
-        )
-        if (best) {
-            Row(
-                Modifier.align(Alignment.BottomStart).padding(6.dp).background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(8.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Filled.Star, null, tint = Color(0xFFFFC107), modifier = Modifier.size(14.dp))
-                Text(" Best", color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-            }
+        Snapshot(tilt = tilt, faded = selected) { Thumbnail(p.uri, Modifier.size(size), sizePx = 320) }
+        if (selected) DoodleIcon(Doodle.CROSS, null, Modifier.align(Alignment.Center), size = size * 0.42f, color = burrow.redPen, stroke = 3.dp)
+        if (best && !selected) {
+            DoodleIcon(Doodle.STAR, null, Modifier.align(Alignment.TopStart).padding(start = 2.dp, top = 2.dp), size = 30.dp, color = burrow.marker, fill = true)
+            DoodleIcon(Doodle.STAR, null, Modifier.align(Alignment.TopStart).padding(start = 2.dp, top = 2.dp), size = 30.dp, color = burrow.ink, stroke = 1.6.dp)
         }
     }
 }

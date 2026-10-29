@@ -27,13 +27,19 @@ interface PhotoDao {
     @Query("UPDATE photos SET kept = 1 WHERE mediaId IN (:ids)")
     suspend fun markKept(ids: List<Long>)
 
+    @Query("UPDATE photos SET privateDismissed = 1 WHERE mediaId IN (:ids)")
+    suspend fun markNotPrivate(ids: List<Long>)
+
+    @Query("DELETE FROM photos")
+    suspend fun clear()
+
     @Query("SELECT * FROM photos WHERE analysisJson IS NOT NULL ORDER BY dateTaken")
     suspend fun analyzed(): List<PhotoEntity>
 
     /** Analyzed photos without their (large) analysis JSON; see [analysisJson]. */
     @Query(
         "SELECT mediaId, uri, bucketId, bucketName, dateTaken, dateModified, sizeBytes, width, height, NULL AS analysisJson, " +
-            "keeper, aesthetic, tags, junkReason, analyzedAt, failed, kept FROM photos WHERE analysisJson IS NOT NULL ORDER BY dateTaken",
+            "keeper, aesthetic, tags, junkReason, analyzedAt, failed, kept, intimate, privateDismissed FROM photos WHERE analysisJson IS NOT NULL ORDER BY dateTaken",
     )
     fun analyzedFlow(): Flow<List<PhotoEntity>>
 
@@ -78,6 +84,9 @@ interface MeetingDao {
 
     @Query("SELECT sourceKey FROM meetings WHERE sourceKey IS NOT NULL")
     suspend fun importedKeys(): List<String>
+
+    @Query("SELECT * FROM meetings WHERE createdAt < :before")
+    suspend fun olderThan(before: Long): List<MeetingEntity>
 
     @Query("SELECT * FROM meetings WHERE id IN (:ids)")
     suspend fun byIds(ids: List<Long>): List<MeetingEntity>

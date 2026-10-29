@@ -1,15 +1,13 @@
-@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
-
 package com.showcase.desertant.ui.meetings
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,48 +17,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.Share
-import androidx.compose.material.icons.outlined.TaskAlt
-import androidx.compose.material.icons.outlined.Translate
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -68,14 +40,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.showcase.desertant.app
 import com.showcase.desertant.audio.formatClock
 import com.showcase.desertant.core.languageName
@@ -87,9 +62,27 @@ import com.showcase.desertant.data.ProfileEntity
 import com.showcase.desertant.data.Utterance
 import com.showcase.desertant.meetings.MeetingWorker
 import com.showcase.desertant.people.People
-import com.showcase.desertant.ui.common.Avatar
 import com.showcase.desertant.ui.common.dateTime
+import com.showcase.desertant.ui.hand.Body
+import com.showcase.desertant.ui.hand.ConfirmSheet
+import com.showcase.desertant.ui.hand.Doodle
+import com.showcase.desertant.ui.hand.DoodleButton
+import com.showcase.desertant.ui.hand.DoodleIcon
+import com.showcase.desertant.ui.hand.Gutter
+import com.showcase.desertant.ui.hand.HandDivider
+import com.showcase.desertant.ui.hand.HandField
+import com.showcase.desertant.ui.hand.HandLink
+import com.showcase.desertant.ui.hand.HandSheet
+import com.showcase.desertant.ui.hand.InkButton
+import com.showcase.desertant.ui.hand.MarkedText
+import com.showcase.desertant.ui.hand.MaxColumn
+import com.showcase.desertant.ui.hand.Meta
+import com.showcase.desertant.ui.hand.SectionHead
+import com.showcase.desertant.ui.hand.handUnderline
+import com.showcase.desertant.ui.hand.marker
 import com.showcase.desertant.ui.shell.LocalWideLayout
+import com.showcase.desertant.ui.theme.Hand
+import com.showcase.desertant.ui.theme.burrow
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -98,7 +91,7 @@ fun MeetingDetailScreen(id: Long, onBack: () -> Unit, open: (String) -> Unit) {
     MeetingDetailContent(id, open = open, embedded = false, onBack = onBack)
 }
 
-/** A meeting's notes. [embedded] drops the back button for the Fold's two-pane layout. */
+/** A talk's notes. [embedded] drops the back button for the Fold's two-pane layout. */
 @Composable
 fun MeetingDetailContent(id: Long, open: (String) -> Unit, embedded: Boolean, onBack: () -> Unit = {}) {
     val context = LocalContext.current
@@ -114,64 +107,47 @@ fun MeetingDetailContent(id: Long, open: (String) -> Unit, embedded: Boolean, on
     var confirmDelete by remember { mutableStateOf(false) }
 
     val m = meeting ?: return
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(if (embedded) "" else "Meeting notes") },
-                navigationIcon = { if (!embedded) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
-                actions = {
-                    if (m.status == MeetingStatus.READY) IconButton(onClick = { sharing = true }) { Icon(Icons.Outlined.Share, "Share notes") }
-                    Box {
-                        IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "More") }
-                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                            DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; renaming = true })
-                            DropdownMenuItem(text = { Text("Process again") }, onClick = {
-                                menu = false
-                                scope.launch {
-                                    db.meetings().setStatus(id, MeetingStatus.QUEUED, "Waiting to be processed")
-                                    MeetingWorker.enqueue(context, id)
-                                }
-                            })
-                            DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; confirmDelete = true })
-                        }
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            if (m.status != MeetingStatus.READY) {
-                ProcessingState(m) {
-                    scope.launch {
-                        db.meetings().setStatus(id, MeetingStatus.QUEUED, "Waiting to be processed")
-                        MeetingWorker.enqueue(context, id)
-                    }
-                }
-            } else {
-                MeetingNotes(m, speakers, profiles, onRename = { renaming = true }, onAssign = { assigning = it }, open = open)
-            }
-        }
+    fun retry() = scope.launch {
+        db.meetings().setStatus(id, MeetingStatus.QUEUED, "Waiting to be written up")
+        MeetingWorker.enqueue(context, id)
     }
 
-    if (renaming) RenameDialog(m.title, onDismiss = { renaming = false }) { t -> scope.launch { db.meetings().rename(id, t) }; renaming = false }
+    Column(Modifier.fillMaxSize().background(burrow.paper).statusBarsPadding()) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (!embedded) DoodleButton(Doodle.BACK, "Back", onBack)
+            Spacer(Modifier.weight(1f))
+            if (m.status == MeetingStatus.READY) DoodleButton(Doodle.SHARE, "Share notes", { sharing = true })
+            Box {
+                HandLink("more", { menu = true }, Modifier.padding(horizontal = 8.dp))
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; renaming = true })
+                    DropdownMenuItem(text = { Text("Write the notes again") }, onClick = { menu = false; retry() })
+                    DropdownMenuItem(text = { Text("Delete this talk") }, onClick = { menu = false; confirmDelete = true })
+                }
+            }
+        }
+        if (m.status != MeetingStatus.READY) ProcessingState(m, ::retry)
+        else Notes(m, speakers, profiles, onRename = { renaming = true }, onAssign = { assigning = it }, open = open)
+    }
+
+    if (renaming) RenameSheet(m.title, onDismiss = { renaming = false }) { t -> scope.launch { db.meetings().rename(id, t) }; renaming = false }
     if (sharing) ShareDialog(m, speakers, profiles) { sharing = false }
     assigning?.let { s -> AssignSpeakerDialog(s, profiles, onDismiss = { assigning = null }) }
     if (confirmDelete) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text("Delete this meeting?") },
-            text = { Text("The recording, transcript and notes are removed from this phone.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmDelete = false
-                    scope.launch {
-                        File(m.audioPath).delete()
-                        db.meetings().delete(id)
-                        if (!embedded) onBack()
-                    }
-                }) { Text("Delete") }
+        ConfirmSheet(
+            "delete this talk?",
+            "The recording, transcript and notes are removed from this phone for good.",
+            "delete it",
+            {
+                confirmDelete = false
+                scope.launch {
+                    File(m.audioPath).delete()
+                    db.meetings().delete(id)
+                    if (!embedded) onBack()
+                }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+            { confirmDelete = false },
+            danger = true,
         )
     }
 }
@@ -179,29 +155,25 @@ fun MeetingDetailContent(id: Long, open: (String) -> Unit, embedded: Boolean, on
 @Composable
 private fun ProcessingState(m: MeetingEntity, onRetry: () -> Unit) {
     Column(
-        Modifier.fillMaxSize().padding(32.dp),
+        Modifier.fillMaxSize().padding(horizontal = Gutter, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text(m.title, style = MaterialTheme.typography.headlineSmall)
+        Text(m.title, style = Hand.headline, color = burrow.ink)
         if (m.status == MeetingStatus.FAILED) {
-            Icon(Icons.Outlined.ErrorOutline, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(40.dp))
-            Text(m.error ?: "Processing failed.", color = MaterialTheme.colorScheme.error)
-            Button(onClick = onRetry) { Text("Try again") }
+            DoodleIcon(Doodle.CROSS, null, size = 40.dp, color = burrow.redPen, stroke = 3.dp)
+            Body(m.error ?: "The notes couldn't be written.", color = burrow.redPen)
+            InkButton("try again", onRetry)
         } else {
-            CircularProgressIndicator()
-            Text(m.progress ?: "Waiting to be processed", style = MaterialTheme.typography.bodyLarge)
-            Text(
-                "Language → transcript → speakers → topics → people. It runs in the background on this phone; you'll get a notification when the notes are ready.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            CircularProgressIndicator(color = burrow.ink, strokeWidth = 2.dp)
+            Text((m.progress ?: "waiting to be written up").lowercase(), style = Hand.door, color = burrow.ink)
+            Meta("cleaning the audio → the language → the words → who spoke when → topics and follow-ups. It all runs on this phone; you'll get a quiet notification.")
         }
     }
 }
 
 @Composable
-private fun MeetingNotes(
+private fun Notes(
     m: MeetingEntity,
     speakers: List<MeetingSpeakerEntity>,
     profiles: List<ProfileEntity>,
@@ -213,47 +185,85 @@ private fun MeetingNotes(
     val topics = remember(m.topicsJson) { decodeTopics(m.topicsJson) }
     val highlights = remember(m.highlightsJson) { decodeMoments(m.highlightsJson) }
     val followUps = remember(m.followUpsJson) { decodeMoments(m.followUpsJson) }
+    val audio = remember(m.audioPath) { File(m.audioPath).exists() }
     val player = rememberMeetingPlayer(m.audioPath)
     var filter by rememberSaveable { mutableStateOf("") }
+    val done = remember { mutableStateListOf<Int>() }
     val shown = remember(utterances, filter) { if (filter.isBlank()) utterances else utterances.filter { it.text.contains(filter, true) } }
     val active = utterances.indexOfLast { player.positionSec >= it.start - 0.05 }.takeIf { player.playing || player.positionSec > 0 }
     val wide = LocalWideLayout.current
+    val context = LocalContext.current
 
     val overview: LazyListScope.() -> Unit = {
-        item { Header(m, topics, onRename) }
-        item { PlayerBar(player, m.durationSec) }
-        item { SpeakersCard(m, speakers, profiles, player, onAssign, open) }
-        if (highlights.isNotEmpty()) item { MomentsCard("Highlights", highlights, speakers, profiles) { player.seek(it.start) } }
-        if (followUps.isNotEmpty()) item { MomentsCard("Possible follow-ups", followUps, speakers, profiles, checklist = true) { player.seek(it.start) } }
-    }
-    val transcript: LazyListScope.() -> Unit = {
         item {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-                Text("Transcript", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                Text("${utterances.size} turns", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(verticalAlignment = Alignment.Top) {
+                Text(m.title, Modifier.weight(1f).clickable(onClick = onRename), style = Hand.headline, color = burrow.ink)
+            }
+            Meta(
+                listOfNotNull(dateTime(context, m.createdAt), formatClock(m.durationSec), m.language?.let { languageName(it) }).joinToString(" · "),
+                Modifier.padding(top = 2.dp),
+            )
+            if (m.languageSupported == false) Meta("transcription isn't trained on this language", color = burrow.redPen)
+            if (topics.isNotEmpty()) {
+                val words = topics.take(4).joinToString("  ·  ") { it.name.lowercase() }
+                MarkedText(words, Modifier.padding(top = 10.dp), mark = topics.first().name.lowercase(), style = Hand.label)
             }
         }
         item {
-            OutlinedTextField(filter, { filter = it }, placeholder = { Text("Find in transcript") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            if (audio && player.available) PlayerLine(player, m.durationSec)
+            else Meta("The audio was deleted after 30 days. The notes stay.", Modifier.padding(vertical = 8.dp))
+        }
+        if (speakers.isNotEmpty()) item { Lanes(utterances, speakers, profiles, m.durationSec, player) }
+        item { WhoWasThere(speakers, profiles, onAssign, open) }
+        if (highlights.isNotEmpty()) item {
+            SectionHead("worth remembering")
+            highlights.forEach { mo -> MomentLine(mo, player) }
+        }
+        if (followUps.isNotEmpty()) item {
+            SectionHead("to do", note = "tap to tick")
+            followUps.forEachIndexed { i, mo ->
+                val ticked = i in done
+                Row(
+                    Modifier.fillMaxWidth().clickable { if (ticked) done.remove(i) else done.add(i) }.padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Box(Modifier.padding(top = 2.dp).size(20.dp).border(1.6.dp, burrow.ink, RoundedCornerShape(4.dp)), contentAlignment = Alignment.Center) {
+                        if (ticked) DoodleIcon(Doodle.TICK, null, size = 22.dp, stroke = 2.4.dp)
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            mo.text,
+                            style = Hand.label.copy(textDecoration = if (ticked) TextDecoration.LineThrough else null),
+                            color = if (ticked) burrow.graphite else burrow.ink,
+                        )
+                        Meta("${lookFor(mo.speaker, speakers, profiles).name} · ${formatClock(mo.start)}")
+                    }
+                }
+            }
+        }
+    }
+    val transcript: LazyListScope.() -> Unit = {
+        item {
+            SectionHead("every word", note = "${utterances.size} turns")
+            Spacer(Modifier.height(8.dp))
+            HandField(filter, { filter = it }, placeholder = "find in this talk", singleLine = true, leading = Doodle.SEARCH)
         }
         itemsIndexed(shown, key = { i, u -> "${u.start}-$i" }) { _, u ->
-            Bubble(u, lookFor(u.speaker, speakers, profiles), isActive = active != null && utterances.getOrNull(active) == u) { player.seek(u.start) }
+            Line(u, lookFor(u.speaker, speakers, profiles), isActive = active != null && utterances.getOrNull(active) == u) { player.seek(u.start) }
         }
-        if (utterances.isEmpty()) item { Text("No speech was found in this recording.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        if (utterances.isEmpty()) item { Meta("No speech was found in this recording.") }
     }
 
+    val pad = PaddingValues(start = Gutter, end = Gutter, top = 4.dp, bottom = 40.dp)
     if (wide) {
         Row(Modifier.fillMaxSize()) {
-            LazyColumn(Modifier.weight(1f).fillMaxHeight(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = overview)
-            LazyColumn(Modifier.weight(1f).fillMaxHeight(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = transcript)
+            LazyColumn(Modifier.weight(1f).fillMaxHeight(), contentPadding = pad, verticalArrangement = Arrangement.spacedBy(16.dp), content = overview)
+            LazyColumn(Modifier.weight(1f).fillMaxHeight(), contentPadding = pad, verticalArrangement = Arrangement.spacedBy(10.dp), content = transcript)
         }
     } else {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            LazyColumn(
-                Modifier.widthIn(max = 760.dp).fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
+            LazyColumn(Modifier.widthIn(max = MaxColumn + Gutter * 2).fillMaxSize(), contentPadding = pad, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 overview()
                 transcript()
             }
@@ -261,209 +271,142 @@ private fun MeetingNotes(
     }
 }
 
+/** A drawn play circle and a scrub line; tap the line to jump. */
 @Composable
-private fun Header(m: MeetingEntity, topics: List<com.showcase.desertant.data.TopicScore>, onRename: () -> Unit) {
-    val context = LocalContext.current
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.Top) {
-            Text(m.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            IconButton(onClick = onRename) { Icon(Icons.Outlined.Edit, "Rename") }
+private fun PlayerLine(player: MeetingPlayer, duration: Double) {
+    val total = (player.durationSec.takeIf { it > 0 } ?: duration).coerceAtLeast(0.1)
+    val ink = burrow.ink
+    val rule = burrow.rule
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier.size(48.dp).clip(CircleShape).border(1.8.dp, ink, CircleShape).clickable(onClick = player::toggle),
+            contentAlignment = Alignment.Center,
+        ) { DoodleIcon(if (player.playing) Doodle.PAUSE else Doodle.PLAY, if (player.playing) "Pause" else "Play", size = 22.dp) }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Canvas(
+                Modifier
+                    .fillMaxWidth()
+                    .height(24.dp)
+                    .pointerInput(total) { detectTapGestures { o -> player.seek(o.x / size.width * total, andPlay = player.playing) } },
+            ) {
+                val y = size.height / 2
+                drawLine(rule, Offset(0f, y), Offset(size.width, y), 2.dp.toPx(), StrokeCap.Round)
+                val x = (player.positionSec / total * size.width).toFloat().coerceIn(0f, size.width)
+                drawLine(ink, Offset(0f, y), Offset(x, y), 2.6.dp.toPx(), StrokeCap.Round)
+                drawCircle(ink, 5.dp.toPx(), Offset(x, y))
+            }
+            Row {
+                Meta(formatClock(player.positionSec), Modifier.weight(1f))
+                Meta(formatClock(total))
+            }
         }
-        Text(
-            "${dateTime(context, m.createdAt)} · ${formatClock(m.durationSec)}",
-            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        m.language?.let { lang ->
+    }
+}
+
+/** One thin inked lane per voice, each with its own stroke texture instead of a color. */
+@Composable
+private fun Lanes(utterances: List<Utterance>, speakers: List<MeetingSpeakerEntity>, profiles: List<ProfileEntity>, duration: Double, player: MeetingPlayer) {
+    val ink = burrow.ink
+    val d = duration.coerceAtLeast(1.0)
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        speakers.forEachIndexed { row, s ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Translate, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.width(6.dp))
-                Text(languageName(lang), style = MaterialTheme.typography.bodyMedium)
-                if (m.languageSupported == false) {
-                    Text("  · transcription isn't trained on this language", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                Meta(lookFor(s.index, speakers, profiles).name.substringBefore(' '), Modifier.width(72.dp), maxLines = 1)
+                Canvas(
+                    Modifier
+                        .weight(1f)
+                        .height(14.dp)
+                        .pointerInput(d) { detectTapGestures { o -> player.seek(o.x / size.width * d) } },
+                ) {
+                    val y = size.height / 2
+                    val effect = when (row % 3) {
+                        0 -> null
+                        1 -> PathEffect.dashPathEffect(floatArrayOf(14f, 6f))
+                        else -> PathEffect.dashPathEffect(floatArrayOf(4f, 5f))
+                    }
+                    utterances.filter { it.speaker == s.index }.forEach { u ->
+                        val x0 = (u.start / d * size.width).toFloat()
+                        val x1 = (u.end / d * size.width).toFloat().coerceAtLeast(x0 + 3f)
+                        drawLine(ink, Offset(x0, y), Offset(x1, y), 2.6.dp.toPx(), StrokeCap.Round, effect)
+                    }
+                    val x = (player.positionSec / d * size.width).toFloat()
+                    if (player.positionSec > 0) drawLine(ink.copy(alpha = 0.4f), Offset(x, 0f), Offset(x, size.height), 1.dp.toPx())
                 }
             }
         }
-        if (topics.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            topics.forEach { TopicPill(it.name) }
-        }
     }
 }
 
 @Composable
-private fun PlayerBar(player: MeetingPlayer, duration: Double) {
-    if (!player.available) return
-    val total = player.durationSec.takeIf { it > 0 } ?: duration
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
-        Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            FilledIconButton(onClick = player::toggle) {
-                Icon(if (player.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (player.playing) "Pause" else "Play")
-            }
-            Spacer(Modifier.width(8.dp))
-            Slider(
-                value = player.positionSec.toFloat().coerceIn(0f, total.toFloat().coerceAtLeast(0.1f)),
-                onValueChange = { player.seek(it.toDouble(), andPlay = player.playing) },
-                valueRange = 0f..total.toFloat().coerceAtLeast(0.1f),
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text("${formatClock(player.positionSec)} / ${formatClock(total)}", style = MaterialTheme.typography.labelMedium)
-        }
-    }
-}
-
-@Composable
-private fun SpeakersCard(
-    m: MeetingEntity,
-    speakers: List<MeetingSpeakerEntity>,
-    profiles: List<ProfileEntity>,
-    player: MeetingPlayer,
-    onAssign: (MeetingSpeakerEntity) -> Unit,
-    open: (String) -> Unit,
-) {
+private fun WhoWasThere(speakers: List<MeetingSpeakerEntity>, profiles: List<ProfileEntity>, onAssign: (MeetingSpeakerEntity) -> Unit, open: (String) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val people = remember { People(context) }
-    val utterances = remember(m.utterancesJson) { decodeUtterances(m.utterancesJson) }
-    val totalTalk = speakers.sumOf { it.talkSec }.coerceAtLeast(1e-6)
-    ElevatedCard {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Who was there", style = MaterialTheme.typography.titleMedium)
-            if (speakers.isEmpty()) Text("No distinct speakers detected.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            speakers.forEach { s ->
-                val look = lookFor(s.index, speakers, profiles)
-                val suggestion = s.suggestedProfileId?.let { id -> profiles.firstOrNull { it.id == id } }
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable {
-                        if (look.profile != null) open("person/${look.profile.id}") else onAssign(s)
-                    }) {
-                        Avatar(look.name, look.color, 40.dp)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(look.name, style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                "${formatClock(s.talkSec)} · ${"%.0f".format(s.talkSec / totalTalk * 100)}% of the talking · ${s.words} words",
-                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        TextButton(onClick = { onAssign(s) }) { Text(if (look.profile == null) "Who is this?" else "Change") }
-                    }
-                    LinearProgressIndicator(
-                        progress = { (s.talkSec / totalTalk).toFloat() },
-                        color = look.color,
-                        modifier = Modifier.fillMaxWidth().height(6.dp),
-                    )
-                    if (look.profile == null && suggestion != null) {
-                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)) {
-                            Row(Modifier.padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    "Sounds like ${suggestion.name} · ${"%.0f".format((s.suggestionScore ?: 0.0) * 100)}% voice match",
-                                    style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f),
-                                )
-                                IconButton(onClick = { scope.launch { people.assign(s.id, suggestion.id) } }) { Icon(Icons.Outlined.Check, "Yes, it's ${suggestion.name}") }
-                                IconButton(onClick = { scope.launch { people.dismissSuggestion(s.id) } }) { Icon(Icons.Outlined.Close, "No") }
-                            }
-                        }
-                    }
-                }
-            }
-            if (speakers.isNotEmpty()) {
-                HorizontalDivider()
-                Timeline(utterances, speakers, profiles, m.durationSec, player)
-            }
-        }
+    val total = speakers.sumOf { it.talkSec }.coerceAtLeast(1e-6)
+    SectionHead("who was there")
+    if (speakers.isEmpty()) {
+        Meta("No distinct voices found.")
+        return
     }
-}
-
-/** One lane per speaker; tap anywhere to jump there. */
-@Composable
-private fun Timeline(utterances: List<Utterance>, speakers: List<MeetingSpeakerEntity>, profiles: List<ProfileEntity>, duration: Double, player: MeetingPlayer) {
-    val lanes = speakers.map { it.index }
-    val track = MaterialTheme.colorScheme.surfaceVariant
-    val cursor = MaterialTheme.colorScheme.onSurface
-    val colors = lanes.associateWith { lookFor(it, speakers, profiles).color }
-    val d = duration.coerceAtLeast(1.0)
-    Canvas(
-        Modifier
-            .fillMaxWidth()
-            .height((14 * lanes.size + 6 * (lanes.size - 1)).coerceAtLeast(14).dp)
-            .pointerInput(d) { detectTapGestures { o -> player.seek(o.x / size.width * d) } },
-    ) {
-        val laneH = 14.dp.toPx()
-        val gap = 6.dp.toPx()
-        lanes.forEachIndexed { row, speaker ->
-            val y = row * (laneH + gap)
-            drawRoundRect(track, Offset(0f, y), Size(size.width, laneH), CornerRadius(laneH / 2))
-            utterances.filter { it.speaker == speaker }.forEach { u ->
-                val x0 = (u.start / d * size.width).toFloat()
-                val x1 = (u.end / d * size.width).toFloat()
-                drawRoundRect(colors.getValue(speaker), Offset(x0, y), Size((x1 - x0).coerceAtLeast(3f), laneH), CornerRadius(laneH / 3))
-            }
-        }
-        val x = (player.positionSec / d * size.width).toFloat()
-        drawLine(cursor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 2.dp.toPx())
-    }
-}
-
-@Composable
-private fun MomentsCard(
-    title: String,
-    moments: List<Moment>,
-    speakers: List<MeetingSpeakerEntity>,
-    profiles: List<ProfileEntity>,
-    checklist: Boolean = false,
-    onSeek: (Moment) -> Unit,
-) {
-    ElevatedCard {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            moments.forEach { mo ->
-                val look = lookFor(mo.speaker, speakers, profiles)
-                Row(Modifier.fillMaxWidth().clickable { onSeek(mo) }, verticalAlignment = Alignment.Top) {
-                    if (checklist) Icon(Icons.Outlined.TaskAlt, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                    else Box(Modifier.padding(top = 6.dp).size(8.dp).background(look.color, RoundedCornerShape(4.dp)))
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(mo.text, style = MaterialTheme.typography.bodyMedium)
-                        Text("${look.name} · ${formatClock(mo.start)}", style = MaterialTheme.typography.labelSmall, color = look.color)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun Bubble(u: Utterance, look: SpeakerLook, isActive: Boolean, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick), verticalAlignment = Alignment.Top) {
-        Avatar(look.name, look.color, 32.dp)
-        Spacer(Modifier.width(10.dp))
-        Column(
-            Modifier
-                .weight(1f)
-                .background(
-                    if (isActive) look.color.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceContainer,
-                    RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 16.dp),
-                )
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-        ) {
-            Row {
-                Text(look.name, style = MaterialTheme.typography.labelLarge, color = look.color, modifier = Modifier.weight(1f))
-                Text(formatClock(u.start), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Text(u.text, style = MaterialTheme.typography.bodyLarge)
-        }
-    }
-}
-
-@Composable
-private fun RenameDialog(current: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
-    var text by remember { mutableStateOf(current) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Rename meeting") },
-        text = { OutlinedTextField(text, { text = it }, singleLine = true) },
-        confirmButton = { TextButton(onClick = { if (text.isNotBlank()) onSave(text.trim()) }) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    Text(
+        speakers.joinToString("  ·  ") { s -> "${lookFor(s.index, speakers, profiles).name.substringBefore(' ').lowercase()} ${"%.0f".format(s.talkSec / total * 100)}%" },
+        style = Hand.label, color = burrow.ink, modifier = Modifier.padding(top = 4.dp),
     )
+    speakers.forEach { s ->
+        val look = lookFor(s.index, speakers, profiles)
+        val suggestion = s.suggestedProfileId?.let { id -> profiles.firstOrNull { it.id == id } }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable { if (look.profile != null) open("person/${look.profile.id}") else onAssign(s) }
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(look.name, style = Hand.door.copy(fontSize = 22.sp), color = burrow.ink)
+                Meta("${formatClock(s.talkSec)} of talking · ${s.words} words")
+            }
+            when {
+                look.profile == null && suggestion != null -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (suggestion.isMe) "you?" else "${suggestion.name.substringBefore(' ')}?", style = Hand.small, color = burrow.ink)
+                    DoodleButton(Doodle.TICK, "Yes, it's ${suggestion.name}", { scope.launch { people.assign(s.id, suggestion.id) } }, size = 20.dp)
+                    DoodleButton(Doodle.CROSS, "No", { scope.launch { people.dismissSuggestion(s.id) } }, size = 18.dp, color = burrow.redPen)
+                }
+                look.profile == null -> Text("who is this?", Modifier.handUnderline(burrow.ink), style = Hand.small, color = burrow.ink)
+                else -> DoodleIcon(Doodle.ARROW, null, size = 20.dp, color = burrow.pencil)
+            }
+        }
+    }
 }
 
+@Composable
+private fun MomentLine(mo: Moment, player: MeetingPlayer) {
+    Row(Modifier.fillMaxWidth().clickable { player.seek(mo.start) }.padding(vertical = 6.dp), verticalAlignment = Alignment.Top) {
+        Text(formatClock(mo.start), Modifier.width(52.dp).padding(top = 2.dp), style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp), color = burrow.pencil)
+        Body(mo.text, Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun Line(u: Utterance, look: SpeakerLook, isActive: Boolean, onClick: () -> Unit) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(vertical = 4.dp)) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(look.name.lowercase(), style = Hand.small, color = burrow.ink, modifier = if (isActive) Modifier.marker(burrow.marker) else Modifier)
+            Spacer(Modifier.width(8.dp))
+            Meta(formatClock(u.start))
+        }
+        Body(u.text)
+    }
+    HandDivider(seed = u.start.toInt())
+}
+
+@Composable
+private fun RenameSheet(current: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    var text by remember { mutableStateOf(current) }
+    HandSheet(onDismiss) {
+        Text("rename this talk", style = Hand.headline.copy(fontSize = 34.sp), color = burrow.ink)
+        HandField(text, { text = it }, singleLine = true)
+        InkButton("save", { if (text.isNotBlank()) onSave(text.trim()) }, Modifier.fillMaxWidth(), enabled = text.isNotBlank())
+    }
+}

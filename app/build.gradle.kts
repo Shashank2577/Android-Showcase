@@ -31,8 +31,8 @@ android {
         // typed foreground services and scoped storage. The SDK itself needs 24+.
         minSdk = 30
         targetSdk = 35
-        versionCode = 2
-        versionName = "2.0"
+        versionCode = 3
+        versionName = "3.0"
 
         // arm64 only: every current phone (Galaxy Z Fold 7 included) is arm64-v8a,
         // and dropping x86_64 halves the native libraries each model brings.
@@ -62,6 +62,16 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            all {
+                it.systemProperty("roborazzi.test.record", "true")
+                it.systemProperty("robolectric.pixelCopyRenderMode", "hardware")
+            }
+        }
     }
 
     packaging {
@@ -118,4 +128,13 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+
+    // Screenshot tests: the real Compose screens rendered on the JVM (Robolectric), saved as PNGs by Roborazzi.
+    testImplementation(composeBom)
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.32.2")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.32.2")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("androidx.work:work-testing:2.10.1")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

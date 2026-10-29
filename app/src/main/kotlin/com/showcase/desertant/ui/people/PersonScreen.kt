@@ -64,6 +64,7 @@ import com.showcase.desertant.audio.resample
 import com.showcase.desertant.core.languageName
 import com.showcase.desertant.data.MeetingStatus
 import com.showcase.desertant.people.People
+import com.showcase.desertant.ui.hand.ConfirmSheet
 import com.showcase.desertant.ui.common.Avatar
 import com.showcase.desertant.ui.common.dateTime
 import com.showcase.desertant.ui.components.ScoreBar
@@ -112,7 +113,7 @@ fun PersonContent(id: Long, open: (String) -> Unit, embedded: Boolean, onBack: (
                         IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "More") }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; renaming = true })
-                            DropdownMenuItem(text = { Text("Delete person") }, onClick = { menu = false; deleting = true })
+                            DropdownMenuItem(text = { Text("Forget this person") }, onClick = { menu = false; deleting = true })
                         }
                     }
                 },
@@ -196,12 +197,13 @@ fun PersonContent(id: Long, open: (String) -> Unit, embedded: Boolean, onBack: (
         )
     }
     if (deleting) {
-        AlertDialog(
-            onDismissRequest = { deleting = false },
-            title = { Text("Delete ${p.name}?") },
-            text = { Text("Their voice profile is removed. Meetings stay, with their turns shown as an unnamed speaker.") },
-            confirmButton = { TextButton(onClick = { scope.launch { people.delete(id); deleting = false; if (!embedded) onBack() } }) { Text("Delete") } },
-            dismissButton = { TextButton(onClick = { deleting = false }) { Text("Cancel") } },
+        ConfirmSheet(
+            "forget ${p.name.substringBefore(' ')}?",
+            "Burrow deletes their learned voice and unlinks them from every talk. The talks stay, with their turns shown as an unnamed voice.",
+            "forget them",
+            { scope.launch { people.delete(id); deleting = false; if (!embedded) onBack() } },
+            { deleting = false },
+            danger = true,
         )
     }
 }

@@ -5,6 +5,7 @@ import ai.desertant.eye.Level
 import ai.desertant.eye.Options
 import ai.desertant.eye.Part
 import ai.desertant.eye.Tag
+import ai.desertant.moderator.Options as ModerationOptions
 import android.content.Context
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
@@ -22,6 +23,7 @@ import com.showcase.desertant.core.ModelKind
 import com.showcase.desertant.data.PhotoEntity
 import com.showcase.desertant.data.StoreJson
 import com.showcase.desertant.notify.Notifications
+import com.showcase.desertant.privacy.LedgerEntry
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -61,21 +63,31 @@ class PhotoScanWorker(context: Context, params: WorkerParameters) : CoroutineWor
             if (isStopped) return Result.success()
             val updated = try {
                 val bitmap = thumbnail(Uri.parse(photo.uri))
+                var intimate: Boolean? = null
                 val analysis = try {
                     // Read the model each time: Settings can unload and recreate it mid-scan.
-                    app.hub.eye.analyze(bitmap, Options(parts = setOf(Part.PHOTO, Part.FACES, Part.SHARPNESS), maxFaces = 8))
+                    val a = app.hub.eye.analyze(bitmap, Options(parts = setOf(Part.PHOTO, Part.FACES, Part.SHARPNESS), maxFaces = 8))
+                    // A second, specialised opinion before the private sweep calls anything intimate.
+                    if (mightBeIntimate(a)) {
+                        intimate = runCatching {
+                            app.hub.ensureReady(ModelKind.MODERATOR)
+                            app.hub.moderator.analyze(bitmap, ModerationOptions()).isNSFW
+                        }.getOrNull()
+                    }
+                    a
                 } finally {
                     bitmap.recycle()
                 }
-                photo.withAnalysis(analysis)
+                photo.withAnalysis(analysis).copy(intimate = intimate)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 photo.copy(failed = true, analyzedAt = System.currentTimeMillis())
             }
-            batch += updated.copy(kept = known[photo.mediaId]?.kept ?: false)
+            batch += updated.copy(kept = known[photo.mediaId]?.kept ?: false, privateDismissed = known[photo.mediaId]?.privateDismissed ?: false)
             if (batch.size >= 12 || i == todo.lastIndex) {
                 dao.upsert(batch)
+                app.ledger.add(LedgerEntry.PHOTOS_CHECKED, batch.size)
                 batch.clear()
                 setProgress(workDataOf(KEY_DONE to i + 1, KEY_TOTAL to todo.size))
                 promote("Analyzed ${i + 1} of ${todo.size} photos", i + 1, todo.size)

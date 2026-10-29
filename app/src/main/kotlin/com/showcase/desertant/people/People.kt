@@ -5,18 +5,24 @@ import com.showcase.desertant.app
 import com.showcase.desertant.data.ProfileEntity
 import com.showcase.desertant.data.StoreJson
 import com.showcase.desertant.data.VoiceSignature
+import com.showcase.desertant.privacy.LedgerEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** Linking voices to people: every confirmation also teaches the person's voice. */
+/**
+ * Linking voices to people. While "learn voices" is on (privacy page), every
+ * confirmation also teaches Burrow the person's voice; each lesson is counted
+ * in the ledger.
+ */
 class People(context: Context) {
-    private val db = context.app.db
+    private val app = context.app
+    private val db = app.db
 
     /** Say that meeting speaker [speakerId] is [profileId], and learn their voice from it. */
     suspend fun assign(speakerId: Long, profileId: Long) {
         val speaker = db.speakers().get(speakerId) ?: return
         db.speakers().assign(speakerId, profileId)
-        speaker.signatureJson?.let { learn(profileId, decode(it)) }
+        if (app.privacy.learnVoices.value) speaker.signatureJson?.let { learn(profileId, decode(it)) }
         refreshSuggestions()
     }
 
@@ -52,6 +58,7 @@ class People(context: Context) {
         db.profiles().get(profileId)?.let { db.profiles().update(it.copy(name = name.trim())) }
     }
 
+    /** Forget this person: their learned voice goes, and every talk they were in is unlinked. */
     suspend fun delete(profileId: Long) {
         db.profiles().delete(profileId)
         refreshSuggestions()
@@ -62,6 +69,7 @@ class People(context: Context) {
         val old = p.signatureJson?.let(::decode)
         val merged = VoiceSignatures.merge(old, p.signatureCount, signature)
         db.profiles().update(p.copy(signatureJson = StoreJson.encodeToString(VoiceSignature.serializer(), merged), signatureCount = p.signatureCount + 1))
+        if (old == null) app.ledger.add(LedgerEntry.VOICES_LEARNED)
     }
 
     /** Re-score every unlinked speaker against the current people. */

@@ -18,6 +18,7 @@ import com.showcase.desertant.data.Utterance
 import com.showcase.desertant.data.VoiceSignature
 import com.showcase.desertant.people.ProfileMatcher
 import com.showcase.desertant.people.VoiceSignatures
+import com.showcase.desertant.privacy.LedgerEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -163,6 +164,7 @@ class MeetingProcessor(private val context: Context) {
                 speakerCount = speakers.size,
             ),
         )
+        context.app.ledger.add(LedgerEntry.TALKS_TRANSCRIBED)
     }
 
     /**

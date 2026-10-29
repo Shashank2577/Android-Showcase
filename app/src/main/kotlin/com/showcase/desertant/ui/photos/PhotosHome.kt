@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@file:OptIn(ExperimentalLayoutApi::class)
 
 package com.showcase.desertant.ui.photos
 
@@ -10,48 +10,17 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.AutoAwesomeMosaic
-import androidx.compose.material.icons.outlined.BlurOn
-import androidx.compose.material.icons.outlined.PhotoLibrary
-import androidx.compose.material.icons.outlined.Screenshot
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -60,29 +29,46 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.showcase.desertant.app
+import com.showcase.desertant.data.PhotoEntity
 import com.showcase.desertant.photos.Album
+import com.showcase.desertant.photos.PhotoInsights
 import com.showcase.desertant.photos.PhotoLibrary
 import com.showcase.desertant.photos.PhotoScanWorker
 import com.showcase.desertant.photos.PhotoScope
-import com.showcase.desertant.ui.common.EmptyState
 import com.showcase.desertant.ui.common.Thumbnail
 import com.showcase.desertant.ui.common.formatBytes
 import com.showcase.desertant.ui.components.prettify
+import com.showcase.desertant.ui.hand.Body
+import com.showcase.desertant.ui.hand.Doodle
+import com.showcase.desertant.ui.hand.DoodleButton
+import com.showcase.desertant.ui.hand.Door
+import com.showcase.desertant.ui.hand.HandDivider
+import com.showcase.desertant.ui.hand.HandField
+import com.showcase.desertant.ui.hand.HandLink
+import com.showcase.desertant.ui.hand.HandPage
+import com.showcase.desertant.ui.hand.HandProgress
+import com.showcase.desertant.ui.hand.HandTag
+import com.showcase.desertant.ui.hand.InkButton
+import com.showcase.desertant.ui.hand.MarkedText
+import com.showcase.desertant.ui.hand.Meta
+import com.showcase.desertant.ui.hand.SectionHead
+import com.showcase.desertant.ui.hand.Snapshot
+import com.showcase.desertant.ui.theme.Hand
+import com.showcase.desertant.ui.theme.burrow
 
-enum class ReviewKind(val title: String) { SIMILAR("Similar shots"), JUNK("Throwaway shots"), SCREENSHOTS("Screenshots") }
+enum class ReviewKind(val title: String) { SIMILAR("keep the best"), JUNK("throwaway shots"), SCREENSHOTS("screenshots") }
 
-private val PERIODS = listOf(30 to "30 days", 90 to "90 days", 365 to "1 year", null to "All time")
+private val PERIODS = listOf(30 to "30 days", 90 to "90 days", 365 to "a year", null to "everything")
 
 fun photoPermissions(): Array<String> = when {
     Build.VERSION.SDK_INT >= 34 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
@@ -93,7 +79,8 @@ fun photoPermissions(): Array<String> = when {
 @Composable
 fun PhotosHome(open: (String) -> Unit) {
     val context = LocalContext.current
-    val insights by context.app.photoInsights.collectAsStateWithLifecycle()
+    val app = context.app
+    val insights by app.photoInsights.collectAsStateWithLifecycle()
     var granted by remember { mutableStateOf(hasFullPhotoAccess(context)) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         granted = hasFullPhotoAccess(context)
@@ -111,86 +98,112 @@ fun PhotosHome(open: (String) -> Unit) {
     var days by rememberSaveable { mutableStateOf<Int?>(30) }
     LaunchedEffect(granted) { if (granted) albums = PhotoLibrary.albums(context) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Photos") },
-                actions = { IconButton(onClick = { open("settings") }) { Icon(Icons.Outlined.Settings, "Settings") } },
+    HandPage(topEnd = { DoodleButton(Doodle.LOCK, "Privacy", { open("privacy") }) }) {
+        Text("photos", style = Hand.headline, color = burrow.ink)
+        val i = insights
+        Meta(if (i == null || i.analyzed == 0) "looked at on this phone, never uploaded" else "${i.analyzed} photos checked · on this phone")
+        Spacer(Modifier.height(24.dp))
+
+        if (!granted) {
+            Body(
+                "Burrow looks through your photos on this phone: it groups bursts and retakes and keeps the best shot, " +
+                    "flags blurry and accidental ones, and finds IDs, cards and other private photos sitting in plain sight.",
+                color = burrow.pencil,
             )
-        },
-    ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()), contentAlignment = Alignment.TopCenter) {
-            Column(
-                Modifier.widthIn(max = 760.dp).fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                if (!granted) {
-                    EmptyState(
-                        Icons.Outlined.PhotoLibrary,
-                        "Clean up your gallery, privately",
-                        "Burrow looks through your photos on this phone to find bursts and near-duplicates, picks the best shot of each moment, and flags blurry and accidental shots. Nothing is uploaded.",
-                    ) {
-                        Button(onClick = { permission.launch(photoPermissions()) }) { Text("Allow photo access") }
-                    }
-                    return@Column
-                }
+            Spacer(Modifier.height(20.dp))
+            InkButton("let Burrow see your photos", { permission.launch(photoPermissions()) }, Modifier.fillMaxWidth())
+            Spacer(Modifier.height(24.dp))
+            Door("the vault", { open("vault") }, meta = "your encrypted, fingerprint-locked photos")
+            return@HandPage
+        }
 
-                val i = insights
-                val reclaim = (i?.duplicateBytes ?: 0) + (i?.junkBytes ?: 0)
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (i == null || i.analyzed == 0) {
-                            Text("Scan to see what you can clear", style = MaterialTheme.typography.titleLarge)
-                            Text("Start with recent photos — a few hundred take a couple of minutes, and the scan carries on in the background.", style = MaterialTheme.typography.bodyMedium)
-                        } else {
-                            Text("You can free up", style = MaterialTheme.typography.titleMedium)
-                            Text(formatBytes(context, reclaim), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                "${i.duplicateCount} extra shots in ${i.groups.size} similar sets · ${i.junk.size} throwaway shots · ${i.analyzed} photos checked",
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                        }
-                    }
-                }
-
-                ScanCard(
-                    albums = albums, album = album, onAlbum = { album = it },
-                    days = days, onDays = { days = it },
-                    running = running != null, done = done, total = total,
-                    onScan = {
-                        if (Build.VERSION.SDK_INT >= 33 &&
-                            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-                        ) notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        PhotoScanWorker.start(context, PhotoScope(album?.id, album?.name, days))
-                    },
-                    onStop = { PhotoScanWorker.cancel(context) },
-                )
-
-                if (i != null && i.analyzed > 0) {
-                    ReviewTile(
-                        icon = Icons.Outlined.AutoAwesomeMosaic,
-                        title = "Similar shots",
-                        subtitle = if (i.groups.isEmpty()) "No near-duplicates found" else "${i.groups.size} moments with extra takes · ${formatBytes(context, i.duplicateBytes)}",
-                        previews = i.groups.take(4).map { it.best.uri },
-                        enabled = i.groups.isNotEmpty(),
-                    ) { open("photos/review/${ReviewKind.SIMILAR.name}") }
-                    ReviewTile(
-                        icon = Icons.Outlined.BlurOn,
-                        title = "Throwaway shots",
-                        subtitle = if (i.junk.isEmpty()) "Nothing blurry or accidental" else "${i.junk.size} blurry, accidental or empty · ${formatBytes(context, i.junkBytes)}",
-                        previews = i.junk.take(4).map { it.uri },
-                        enabled = i.junk.isNotEmpty(),
-                    ) { open("photos/review/${ReviewKind.JUNK.name}") }
-                    ReviewTile(
-                        icon = Icons.Outlined.Screenshot,
-                        title = "Screenshots",
-                        subtitle = if (i.screenshots.isEmpty()) "None found" else "${i.screenshots.size} screenshots · ${formatBytes(context, i.screenshotBytes)}",
-                        previews = i.screenshots.take(4).map { it.uri },
-                        enabled = i.screenshots.isNotEmpty(),
-                    ) { open("photos/review/${ReviewKind.SCREENSHOTS.name}") }
-                    SearchCard(i)
-                }
+        val reclaim = (i?.duplicateBytes ?: 0) + (i?.junkBytes ?: 0)
+        if (i != null && i.analyzed > 0) {
+            if (reclaim > 0) {
+                val size = formatBytes(context, reclaim)
+                MarkedText("you can free up $size", mark = size, style = Hand.headline.copy(fontSize = 38.sp))
+                Spacer(Modifier.height(4.dp))
+                Meta("${i.duplicateCount} extra takes in ${i.groups.size} moments · ${i.junk.size} throwaway shots")
+            } else {
+                MarkedText("nothing to tidy.", mark = "nothing", style = Hand.headline.copy(fontSize = 38.sp))
             }
+            Spacer(Modifier.height(16.dp))
+            Door(
+                "moments — keep the best", if (i.groups.isEmpty()) null else ({ open("photos/review/${ReviewKind.SIMILAR.name}") }),
+                meta = if (i.groups.isEmpty()) "no bursts or retakes found" else "${i.groups.size} moments with extra takes · ${formatBytes(context, i.duplicateBytes)}",
+            )
+            Previews(i.groups.take(5).map { it.best })
+            Door(
+                "throwaway shots", if (i.junk.isEmpty()) null else ({ open("photos/review/${ReviewKind.JUNK.name}") }),
+                meta = if (i.junk.isEmpty()) "nothing blurry or accidental" else "${i.junk.size} blurry, accidental or empty · ${formatBytes(context, i.junkBytes)}",
+            )
+            Door(
+                "screenshots that did their job", if (i.screenshots.isEmpty()) null else ({ open("photos/review/${ReviewKind.SCREENSHOTS.name}") }),
+                meta = if (i.screenshots.isEmpty()) "none found" else "${i.screenshots.size} screenshots · ${formatBytes(context, i.screenshotBytes)}",
+            )
+            HandDivider(Modifier.padding(vertical = 8.dp), seed = 4)
+            Door(
+                "private things — ${i.privateCount}", if (i.privateCount == 0) null else ({ open("sweep") }),
+                alert = i.privateCount > 0,
+                meta = if (i.privateCount == 0) "no IDs, cards or intimate photos in plain sight" else "anyone scrolling your gallery could see these",
+            )
+            if (i.privateCount > 0) Previews(i.private.values.flatten().take(5), blurred = true)
+        }
+        Door("the vault — ${app.vault.count}", { open("vault") }, meta = "encrypted on this phone, opens with your fingerprint")
+
+        Spacer(Modifier.height(20.dp))
+        SectionHead("look through")
+        if (running != null) {
+            Spacer(Modifier.height(6.dp))
+            Body(if (total > 0) "checked $done of $total — you can leave the app" else "getting ready…")
+            Spacer(Modifier.height(8.dp))
+            HandProgress(if (total > 0) done.toFloat() / total else null)
+            HandLink("stop", { PhotoScanWorker.cancel(context) })
+        } else {
+            AlbumPicker(albums, album) { album = it }
+            FlowRow(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                PERIODS.forEach { (d, label) -> HandTag(label, marked = days == d, onClick = { days = d }) }
+            }
+            InkButton(
+                if (days == null) "look through everything" else "look through the last ${PERIODS.first { it.first == days }.second}",
+                {
+                    if (Build.VERSION.SDK_INT >= 33 &&
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                    ) notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    PhotoScanWorker.start(context, PhotoScope(album?.id, album?.name, days))
+                },
+                Modifier.fillMaxWidth().padding(top = 4.dp),
+            )
+            Meta("Photos already checked are skipped, so it's quick the second time.", Modifier.padding(top = 8.dp))
+        }
+
+        if (i != null && i.analyzed > 0) {
+            Spacer(Modifier.height(24.dp))
+            Find(i)
+        }
+    }
+}
+
+@Composable
+private fun Previews(photos: List<PhotoEntity>, blurred: Boolean = false) {
+    if (photos.isEmpty()) return
+    Row(Modifier.padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        photos.forEachIndexed { n, p ->
+            Snapshot(tilt = listOf(-3f, 2f, -1.5f, 3f, -2f)[n % 5]) {
+                Thumbnail(p.uri, Modifier.size(52.dp).then(if (blurred) Modifier.blur(8.dp) else Modifier), sizePx = if (blurred) 20 else 160)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlbumPicker(albums: List<Album>, album: Album?, onAlbum: (Album?) -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    Box {
+        HandLink(album?.let { "${it.name.lowercase()} (${it.count})" } ?: "all albums", { menu = true })
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(text = { Text("All albums") }, onClick = { onAlbum(null); menu = false })
+            albums.forEach { a -> DropdownMenuItem(text = { Text("${a.name} (${a.count})") }, onClick = { onAlbum(a); menu = false }) }
         }
     }
 }
@@ -200,104 +213,23 @@ private fun hasFullPhotoAccess(context: android.content.Context): Boolean =
         (Build.VERSION.SDK_INT >= 34 && ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) == PackageManager.PERMISSION_GRANTED)
 
 @Composable
-private fun ScanCard(
-    albums: List<Album>, album: Album?, onAlbum: (Album?) -> Unit,
-    days: Int?, onDays: (Int?) -> Unit,
-    running: Boolean, done: Int, total: Int,
-    onScan: () -> Unit, onStop: () -> Unit,
-) {
-    var menu by remember { mutableStateOf(false) }
-    ElevatedCard {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Scan", style = MaterialTheme.typography.titleMedium)
-            Box {
-                OutlinedButton(onClick = { menu = true }, enabled = !running) {
-                    Text(album?.let { "${it.name} (${it.count})" } ?: "All albums")
-                }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(text = { Text("All albums") }, onClick = { onAlbum(null); menu = false })
-                    albums.forEach { a ->
-                        DropdownMenuItem(text = { Text("${a.name} (${a.count})") }, onClick = { onAlbum(a); menu = false })
-                    }
-                }
-            }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PERIODS.forEach { (d, label) ->
-                    FilterChip(selected = days == d, onClick = { onDays(d) }, label = { Text(label) }, enabled = !running)
-                }
-            }
-            if (running) {
-                Text(if (total > 0) "Analyzing $done of $total photos — you can leave the app" else "Preparing…", style = MaterialTheme.typography.bodyMedium)
-                if (total > 0) LinearProgressIndicator(progress = { done.toFloat() / total }, modifier = Modifier.fillMaxWidth())
-                else LinearProgressIndicator(Modifier.fillMaxWidth())
-                TextButton(onClick = onStop) { Text("Stop") }
-            } else {
-                Button(onClick = onScan, modifier = Modifier.fillMaxWidth()) { Text("Scan ${PhotoScope(album?.id, album?.name, days).label}") }
-                Text("Already-scanned photos are skipped, so rescans are quick.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReviewTile(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    subtitle: String,
-    previews: List<String>,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    ElevatedCard(onClick = onClick, enabled = enabled) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(title, style = MaterialTheme.typography.titleMedium)
-                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                if (enabled) Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null)
-            }
-            if (previews.isNotEmpty()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    previews.forEach { Thumbnail(it, Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(10.dp))) }
-                    repeat(4 - previews.size) { Spacer(Modifier.weight(1f)) }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SearchCard(insights: com.showcase.desertant.photos.PhotoInsights) {
+private fun Find(insights: PhotoInsights) {
     var query by rememberSaveable { mutableStateOf("") }
     val results = remember(query, insights) { insights.search(query) }
-    var preview by remember { mutableStateOf<com.showcase.desertant.data.PhotoEntity?>(null) }
-    ElevatedCard {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Find photos", style = MaterialTheme.typography.titleMedium)
-            OutlinedTextField(
-                value = query, onValueChange = { query = it },
-                leadingIcon = { Icon(Icons.Outlined.Search, null) },
-                placeholder = { Text("dog, beach, receipt, smiling…") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            if (query.isBlank()) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    insights.topTags.take(14).forEach { (tag, n) ->
-                        AssistChip(onClick = { query = tag }, label = { Text("${prettify(tag)} · $n") })
-                    }
-                }
-            } else {
-                Text("${results.size} photos", style = MaterialTheme.typography.labelLarge)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    results.take(60).forEach { p ->
-                        Thumbnail(p.uri, Modifier.size(86.dp).clip(RoundedCornerShape(8.dp)).clickable { preview = p })
-                    }
-                }
-            }
+    var preview by remember { mutableStateOf<PhotoEntity?>(null) }
+    SectionHead("find a photo")
+    Spacer(Modifier.height(8.dp))
+    HandField(query, { query = it }, placeholder = "dog, beach, receipt, smiling…", singleLine = true, leading = Doodle.SEARCH)
+    Spacer(Modifier.height(10.dp))
+    if (query.isBlank()) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            insights.topTags.take(14).forEach { (tag, n) -> HandTag("${prettify(tag).lowercase()} $n", onClick = { query = tag }) }
+        }
+    } else {
+        Meta("${results.size} photos")
+        Spacer(Modifier.height(8.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            results.take(60).forEach { p -> Thumbnail(p.uri, Modifier.size(84.dp).clickable { preview = p }) }
         }
     }
     preview?.let { PhotoPreview(it) { preview = null } }
