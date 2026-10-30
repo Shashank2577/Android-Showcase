@@ -4,13 +4,14 @@ import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.hardware.biometrics.BiometricPrompt
 import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
-import android.security.keystore.UserNotAuthenticatedException
 import android.util.Size
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,11 +24,13 @@ import kotlinx.serialization.json.Json
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.security.KeyStore
+import java.security.SecureRandom
 import java.util.UUID
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 @Serializable
 data class VaultItem(
@@ -40,25 +43,62 @@ data class VaultItem(
     val kind: String? = null,
 )
 
-class VaultLockedException : Exception("The vault is locked")
+class VaultLockedException : Exception("The vault is locked. Open it again.")
+
+/** What happened when the user tried to open the vault, in words the screen can show. */
+sealed interface VaultOpen {
+    data object Opened : VaultOpen
+    data object Cancelled : VaultOpen
+    data object NoScreenLock : VaultOpen
+
+    /** The screen lock was removed or reset since the vault was made; Android destroyed its key. */
+    data object KeyLost : VaultOpen
+    data class Failed(val message: String) : VaultOpen
+}
+
+/** AES-256-GCM sealing of one file's bytes: `[iv length][iv][ciphertext+tag]`. */
+internal object VaultCrypto {
+    private const val TRANSFORMATION = "AES/GCM/NoPadding"
+    private val random = SecureRandom()
+
+    fun seal(key: SecretKey, plain: ByteArray): ByteArray {
+        val iv = ByteArray(12).also(random::nextBytes)
+        val cipher = Cipher.getInstance(TRANSFORMATION).apply { init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(128, iv)) }
+        return byteArrayOf(iv.size.toByte()) + iv + cipher.doFinal(plain)
+    }
+
+    fun open(key: SecretKey, sealed: ByteArray): ByteArray {
+        val ivSize = sealed[0].toInt()
+        val iv = sealed.copyOfRange(1, 1 + ivSize)
+        val cipher = Cipher.getInstance(TRANSFORMATION).apply { init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv)) }
+        return cipher.doFinal(sealed, 1 + ivSize, sealed.size - 1 - ivSize)
+    }
+}
 
 /**
  * Private photos, moved out of the gallery and encrypted on the phone.
  *
- * - Every file (photo, thumbnail, and the index of what's inside) is AES-256-GCM
- *   encrypted with a key that lives in the Android Keystore, can't be exported,
- *   and only works for a minute after the user confirms with a fingerprint or
- *   their screen lock.
- * - Files live in `noBackupFilesDir`, and the app opts out of backup, so the
- *   vault never reaches a cloud backup. Nothing is visible to the gallery or
- *   other apps.
- * - Decrypted thumbnails are kept only in memory while the vault is open, and
- *   dropped as soon as the app leaves the screen.
+ * How the keys work:
+ * - Photos, thumbnails and the index are sealed with a random 256-bit data key
+ *   (AES-GCM, see [VaultCrypto]).
+ * - That data key is stored only wrapped by a Keystore key that can't leave the
+ *   phone's secure hardware and needs the user's fingerprint or screen lock for
+ *   every single use. Opening the vault is one fingerprint prompt bound to that
+ *   unwrap (a BiometricPrompt CryptoObject), so it works the same on every
+ *   phone, with no "recently unlocked" time window to run out mid-task.
+ * - The unwrapped data key lives only in memory while the vault is open and is
+ *   dropped when Burrow leaves the screen.
+ * - Files live in `noBackupFilesDir` (and the app opts out of backup), so the
+ *   vault never reaches a cloud backup, and no other app can read them.
  */
 class Vault(private val context: Context) {
     private val dir = File(context.noBackupFilesDir, "vault").apply { mkdirs() }
     private val indexFile = File(dir, "index.bin")
+    private val wrappedKeyFile = File(dir, "key.bin")
     private val json = Json { ignoreUnknownKeys = true }
+
+    @Volatile
+    private var dataKey: SecretKey? = null
 
     private val _unlocked = MutableStateFlow(false)
     val unlocked: StateFlow<Boolean> = _unlocked.asStateFlow()
@@ -73,21 +113,52 @@ class Vault(private val context: Context) {
 
     fun available(): Boolean = Biometrics.deviceSecure(context)
 
-    /** Confirm it's the user, then open the vault. */
-    suspend fun unlock(): Boolean {
-        if (_unlocked.value) return true
-        if (!available()) return false
-        if (!Biometrics.confirm(context, "Open the vault", "Your private photos stay encrypted on this phone")) return false
+    /** One fingerprint (or PIN) opens the vault until Burrow leaves the screen. */
+    suspend fun unlock(): VaultOpen {
+        if (dataKey != null) return VaultOpen.Opened
+        if (!available()) return VaultOpen.NoScreenLock
         return try {
-            _items.value = readIndex()
+            val wrapped = if (wrappedKeyFile.exists()) wrappedKeyFile.readBytes() else null
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            try {
+                if (wrapped == null) cipher.init(Cipher.ENCRYPT_MODE, wrappingKey())
+                else cipher.init(Cipher.DECRYPT_MODE, wrappingKey(), GCMParameterSpec(128, wrapped.copyOfRange(1, 1 + wrapped[0])))
+            } catch (_: KeyPermanentlyInvalidatedException) {
+                return VaultOpen.KeyLost
+            }
+            val answer = Biometrics.prompt(
+                context, "Open the vault", "Your private photos stay encrypted on this phone", BiometricPrompt.CryptoObject(cipher),
+            )
+            val unlockedCipher = when (answer) {
+                is Confirmation.Confirmed -> answer.crypto?.cipher ?: cipher
+                Confirmation.Cancelled -> return VaultOpen.Cancelled
+                is Confirmation.Failed -> return VaultOpen.Failed(answer.message)
+            }
+            val key = withContext(Dispatchers.IO) {
+                if (wrapped == null) {
+                    val raw = ByteArray(32).also { SecureRandom().nextBytes(it) }
+                    val sealed = unlockedCipher.doFinal(raw)
+                    writeAtomically(wrappedKeyFile, byteArrayOf(unlockedCipher.iv.size.toByte()) + unlockedCipher.iv + sealed)
+                    SecretKeySpec(raw, "AES")
+                } else {
+                    val ivSize = wrapped[0].toInt()
+                    SecretKeySpec(unlockedCipher.doFinal(wrapped, 1 + ivSize, wrapped.size - 1 - ivSize), "AES")
+                }
+            }
+            dataKey = key
+            if (wrapped == null) withContext(Dispatchers.IO) { migrateLegacy(key) }
+            _items.value = withContext(Dispatchers.IO) { readIndex(key) }
             _unlocked.value = true
-            true
-        } catch (_: UserNotAuthenticatedException) {
-            false
+            VaultOpen.Opened
+        } catch (e: KeyPermanentlyInvalidatedException) {
+            VaultOpen.KeyLost
+        } catch (e: Exception) {
+            VaultOpen.Failed(e.message ?: e.javaClass.simpleName)
         }
     }
 
     fun lock() {
+        dataKey = null
         _unlocked.value = false
         _items.value = emptyList()
         synchronized(thumbs) {
@@ -96,17 +167,19 @@ class Vault(private val context: Context) {
         }
     }
 
+    private fun key(): SecretKey = dataKey ?: throw VaultLockedException()
+
     /**
      * Copy [uris] into the vault. The caller then asks Android to delete the
      * originals; if the user says no, [remove] the copies again.
      */
     suspend fun add(uris: List<Uri>, kind: String? = null): List<VaultItem> = withContext(Dispatchers.IO) {
-        if (!_unlocked.value) throw VaultLockedException()
+        val key = key()
         val added = uris.mapNotNull { uri ->
             val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@mapNotNull null
             val id = UUID.randomUUID().toString()
-            write(File(dir, "$id.photo"), bytes)
-            thumbnailBytes(uri)?.let { write(File(dir, "$id.thumb"), it) }
+            writeAtomically(File(dir, "$id.photo"), VaultCrypto.seal(key, bytes))
+            thumbnailBytes(uri)?.let { writeAtomically(File(dir, "$id.thumb"), VaultCrypto.seal(key, it)) }
             VaultItem(
                 id = id,
                 name = displayName(uri) ?: "photo.jpg",
@@ -117,45 +190,42 @@ class Vault(private val context: Context) {
             )
         }
         val all = _items.value + added
-        writeIndex(all)
+        writeIndex(key, all)
         _items.value = all
         added
     }
 
     suspend fun remove(ids: Collection<String>) = withContext(Dispatchers.IO) {
-        if (!_unlocked.value) throw VaultLockedException()
+        val key = key()
         ids.forEach { id ->
             File(dir, "$id.photo").delete()
             File(dir, "$id.thumb").delete()
             synchronized(thumbs) { thumbs.remove(id)?.recycle() }
         }
         val left = _items.value.filterNot { it.id in ids }
-        writeIndex(left)
+        writeIndex(key, left)
         _items.value = left
     }
 
     suspend fun thumbnail(id: String): Bitmap? = withContext(Dispatchers.IO) {
         synchronized(thumbs) { thumbs[id] }?.let { return@withContext it }
-        if (!_unlocked.value) return@withContext null
-        val bytes = runCatching { read(File(dir, "$id.thumb")) }.getOrNull() ?: return@withContext null
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.also { b -> synchronized(thumbs) { thumbs[id] = b } }
+        val key = dataKey ?: return@withContext null
+        val bytes = runCatching { VaultCrypto.open(key, File(dir, "$id.thumb").readBytes()) }.getOrNull()
+            ?: runCatching { VaultCrypto.open(key, File(dir, "$id.photo").readBytes()) }.getOrNull()
+            ?: return@withContext null
+        decode(bytes, 384)?.also { b -> synchronized(thumbs) { thumbs[id] = b } }
     }
 
     /** The full photo, decoded no larger than [maxSide]. */
     suspend fun photo(id: String, maxSide: Int = 2048): Bitmap? = withContext(Dispatchers.IO) {
-        if (!_unlocked.value) return@withContext null
-        val bytes = runCatching { read(File(dir, "$id.photo")) }.getOrNull() ?: return@withContext null
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-        var sample = 1
-        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxSide) sample *= 2
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+        val key = dataKey ?: return@withContext null
+        val bytes = runCatching { VaultCrypto.open(key, File(dir, "$id.photo").readBytes()) }.getOrNull() ?: return@withContext null
+        decode(bytes, maxSide)
     }
 
     /** Put a copy back in the gallery (Pictures/Burrow), and take it out of the vault. */
     suspend fun export(item: VaultItem): Uri? = withContext(Dispatchers.IO) {
-        if (!_unlocked.value) throw VaultLockedException()
-        val bytes = read(File(dir, "${item.id}.photo"))
+        val bytes = VaultCrypto.open(key(), File(dir, "${item.id}.photo").readBytes())
         val values = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, item.name)
             put(MediaStore.Images.Media.MIME_TYPE, item.mime)
@@ -170,24 +240,48 @@ class Vault(private val context: Context) {
         uri
     }
 
+    /**
+     * Start again with an empty vault, for when Android destroyed the key
+     * (the screen lock was removed). The photos in it can't be recovered.
+     */
+    fun reset() = wipe()
+
     /** Delete everything, used by "wipe everything". Works while locked: no decryption needed. */
     fun wipe() {
         lock()
         dir.listFiles()?.forEach { it.delete() }
-        runCatching { keyStore().deleteEntry(KEY_ALIAS) }
+        runCatching { keyStore().deleteEntry(WRAPPING_KEY) }
+        runCatching { keyStore().deleteEntry(LEGACY_KEY) }
     }
 
-    private fun readIndex(): List<VaultItem> {
-        if (!indexFile.exists()) {
-            // Touch the key so a missing authentication surfaces now, not on the first add.
-            write(indexFile, "[]".toByteArray())
-            return emptyList()
+    /**
+     * 3.0 sealed files directly with a time-window Keystore key. The prompt that
+     * just opened the vault also satisfies that window, so re-seal everything
+     * with the new data key once, then drop the old key.
+     */
+    private fun migrateLegacy(key: SecretKey) {
+        val legacy = runCatching { keyStore().getKey(LEGACY_KEY, null) as? SecretKey }.getOrNull() ?: return
+        dir.listFiles { f -> f.name.endsWith(".photo") || f.name.endsWith(".thumb") || f == indexFile }?.forEach { f ->
+            runCatching { writeAtomically(f, VaultCrypto.seal(key, VaultCrypto.open(legacy, f.readBytes()))) }
         }
-        return json.decodeFromString(ListSerializer(VaultItem.serializer()), String(read(indexFile)))
+        runCatching { keyStore().deleteEntry(LEGACY_KEY) }
     }
 
-    private fun writeIndex(items: List<VaultItem>) =
-        write(indexFile, json.encodeToString(ListSerializer(VaultItem.serializer()), items).toByteArray())
+    private fun readIndex(key: SecretKey): List<VaultItem> {
+        if (!indexFile.exists()) return emptyList()
+        return json.decodeFromString(ListSerializer(VaultItem.serializer()), String(VaultCrypto.open(key, indexFile.readBytes())))
+    }
+
+    private fun writeIndex(key: SecretKey, items: List<VaultItem>) =
+        writeAtomically(indexFile, VaultCrypto.seal(key, json.encodeToString(ListSerializer(VaultItem.serializer()), items).toByteArray()))
+
+    private fun decode(bytes: ByteArray, maxSide: Int): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxSide) sample *= 2
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+    }
 
     private fun thumbnailBytes(uri: Uri): ByteArray? = runCatching {
         val b = context.contentResolver.loadThumbnail(uri, Size(384, 384), null)
@@ -204,38 +298,28 @@ class Vault(private val context: Context) {
         }
     }.getOrNull()
 
-    private fun write(file: File, plain: ByteArray) {
-        val cipher = Cipher.getInstance(TRANSFORMATION).apply { init(Cipher.ENCRYPT_MODE, key()) }
-        val sealed = cipher.doFinal(plain)
+    private fun writeAtomically(file: File, bytes: ByteArray) {
         val tmp = File(file.path + ".tmp")
-        tmp.outputStream().use { out ->
-            out.write(cipher.iv.size)
-            out.write(cipher.iv)
-            out.write(sealed)
+        tmp.writeBytes(bytes)
+        if (!tmp.renameTo(file)) {
+            file.delete()
+            tmp.renameTo(file)
         }
-        tmp.renameTo(file)
-    }
-
-    private fun read(file: File): ByteArray {
-        val all = file.readBytes()
-        val ivSize = all[0].toInt()
-        val iv = all.copyOfRange(1, 1 + ivSize)
-        val cipher = Cipher.getInstance(TRANSFORMATION).apply { init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, iv)) }
-        return cipher.doFinal(all, 1 + ivSize, all.size - 1 - ivSize)
     }
 
     private fun keyStore(): KeyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
 
-    private fun key(): SecretKey {
-        (keyStore().getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+    /** The Keystore key that wraps the data key. Every use needs the user, through the prompt. */
+    private fun wrappingKey(): SecretKey {
+        (keyStore().getKey(WRAPPING_KEY, null) as? SecretKey)?.let { return it }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         generator.init(
-            KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+            KeyGenParameterSpec.Builder(WRAPPING_KEY, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .setKeySize(256)
                 .setUserAuthenticationRequired(true)
-                .setUserAuthenticationParameters(AUTH_SECONDS, KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL)
+                .setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL)
                 .setInvalidatedByBiometricEnrollment(false)
                 .build(),
         )
@@ -243,10 +327,9 @@ class Vault(private val context: Context) {
     }
 
     private companion object {
-        const val KEY_ALIAS = "burrow-vault"
-        const val TRANSFORMATION = "AES/GCM/NoPadding"
+        const val WRAPPING_KEY = "burrow-vault-wrap"
 
-        /** How long one confirmation keeps the key usable: enough to add a sweep's worth of photos. */
-        const val AUTH_SECONDS = 120
+        /** The 3.0 key, which used a time window instead of a per-use prompt. */
+        const val LEGACY_KEY = "burrow-vault"
     }
 }

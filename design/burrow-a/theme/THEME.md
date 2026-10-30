@@ -23,6 +23,17 @@ The theme exists in three places, and all three hold the same values:
 6. **The red pen is only for private or destructive things.** It's used for the "in plain sight" exclamation mark, the cross on a photo you're letting go, and *wipe everything*.
 7. **The text tells the truth.** For example, "recoverable for 30 days", "nothing of yours left this phone" (shown with the real byte count) and "learned 1 voice, with your OK".
 
+## UX rules
+
+These came out of the first round of use, when people said they were lost on some pages.
+
+1. **Every page says what it's for.** A `PageIntro` opens each page: the page's name and one plain sentence about what you can do there.
+2. **Anything tappable looks tappable.** Live rows (`Door`) end in a circled arrow. Rows that lead nowhere are drawn in pencil, with no arrow. Actions are buttons (the ink pill, or the outlined `PillButton`); underlined text is only for minor, tertiary actions.
+3. **No hidden gestures.** There's no long-press and no tap-on-a-title to rename. Choices are drawn on the photo itself (`PickMark` plus a "keep" or "let go" label), and "look closer" is a visible eye button.
+4. **Flows say their steps up front.** `Steps` lists what will happen, such as fingerprint, then copy, then Android's delete prompt. `StepHead` numbers the stages of a page like Mask.
+5. **After something happens, say so and offer the next step.** `DoneNote` reports the result inline ("Let go of 12 photos… back to photos"). Failures explain what to do, such as "download Hindi" or "set a screen lock".
+6. **Permissions show their state.** Each one shows either "allowed ✓" or an "allow" button, and a "settings" button once Android won't ask again. A switch is never used for something that can't be switched back off.
+
 ## Tokens
 
 | Token | Light | Dark | Use |
@@ -54,6 +65,11 @@ The type scale uses Caveat for display (52), headline (40), title (30), door (26
 | `HandTag` | A pill label, either outlined or marked |
 | `HandDivider` and `HandProgress` | Wobbly hairlines: a divider, and a progress line that is partly inked |
 | `HandSheet` and `ConfirmSheet` | Bottom sheets on paper, with a squiggle as the drag handle |
+| `PillButton` | The secondary action: an outlined pill, which is still clearly a button |
+| `PageIntro` | Each page's name, plus one line about what you can do on it |
+| `Steps` and `StepHead` | Numbered steps for a flow, and numbered section heads for step-by-step pages |
+| `PickMark` | The chosen/unchosen tick drawn on a photo |
+| `DoneNote` | An inline confirmation, with an optional next-step link |
 | `HandEmpty`, `SectionHead`, `Meta`, `Body`, `OnDeviceStamp` | Typography helpers |
 | `DoodleIcon` | 24 hand-drawn icons on a 24×24 grid, drawn from SVG path strings, with round caps and slightly off-true lines |
 
@@ -75,6 +91,13 @@ These are rendered on the JVM from the real Compose code, with sample data:
 | ![](shots/05-people.png) | ![](shots/08-record.png) | ![](shots/09-mask.png) |
 | ![](shots/10-share-check.png) | ![](shots/11-privacy.png) | ![](shots/12-vault-locked.png) |
 | ![](shots/14-today-dark.png) | ![](shots/13-sweep.png) | ![](shots/00-design-system-dark.png) |
+| ![](shots/16-person.png) | ![](shots/17-models.png) | ![](shots/19-hindi-talk.png) |
+
+## App icon
+
+![icon](shots/20-icon.png)
+
+The icon is a hand-drawn burrow mound with its dark entrance, on marker yellow. It's an adaptive icon (`mipmap-anydpi-v26/ic_launcher.xml`), and its monochrome layer lets Android 13+ themed icons tint it. The status-bar icon is the same mark as a silhouette.
 
 On the Fold's inner screen, Talks and People open as two panes side by side:
 

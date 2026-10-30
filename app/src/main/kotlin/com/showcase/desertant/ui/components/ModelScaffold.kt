@@ -1,50 +1,44 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
 
 package com.showcase.desertant.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.showcase.desertant.core.ModelKind
 import com.showcase.desertant.core.ModelStatus
+import com.showcase.desertant.ui.hand.Body
+import com.showcase.desertant.ui.hand.HandDivider
+import com.showcase.desertant.ui.hand.HandPage
+import com.showcase.desertant.ui.hand.Meta
+import com.showcase.desertant.ui.hand.PillButton
+import com.showcase.desertant.ui.hand.SectionHead
+import com.showcase.desertant.ui.theme.Hand
+import com.showcase.desertant.ui.theme.burrow
 
 /** Content column width cap: comfortable on a phone, centered on a Fold's inner screen. */
 private val MAX_CONTENT_WIDTH = 720.dp
@@ -55,39 +49,10 @@ fun ShowcaseScaffold(
     onBack: (() -> Unit)?,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(title) },
-                navigationIcon = {
-                    if (onBack != null) {
-                        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        // On a wide screen (a Fold's inner display, a tablet, landscape) keep a
-        // readable column centered rather than stretching cards edge to edge.
-        Box(
-            Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .imePadding()
-                .verticalScroll(rememberScrollState()),
-            contentAlignment = Alignment.TopCenter,
-        ) {
-            Column(
-                Modifier
-                    .widthIn(max = MAX_CONTENT_WIDTH)
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                content()
-                Spacer(Modifier.size(24.dp))
-            }
-        }
+    HandPage(onBack = onBack) {
+        Text(title.lowercase(), style = Hand.headline, color = burrow.ink)
+        Spacer(Modifier.size(12.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) { content() }
     }
 }
 
@@ -112,17 +77,11 @@ fun ModelHeader(kind: ModelKind) {
     val status by hub.status.collectAsState()
     LaunchedEffect(kind) { hub.refresh(kind) }
 
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(kind.tagline, style = MaterialTheme.typography.titleMedium)
-            Text(kind.description, style = MaterialTheme.typography.bodyMedium)
-            Text(
-                "${kind.artifact} · ${kind.sizeLabel}",
-                style = MaterialTheme.typography.labelMedium,
-                fontFamily = FontFamily.Monospace,
-            )
-            ModelStatusRow(kind, status[kind] ?: ModelStatus.Unknown) { hub.downloadInBackground(kind) }
-        }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(kind.tagline.lowercase(), style = Hand.door, color = burrow.ink)
+        Body(kind.description, color = burrow.pencil)
+        Meta("${kind.artifact} · ${kind.sizeLabel}")
+        ModelStatusRow(kind, status[kind] ?: ModelStatus.Unknown) { hub.downloadInBackground(kind) }
     }
 }
 
@@ -150,11 +109,7 @@ fun ModelStatusRow(kind: ModelKind, status: ModelStatus, onDownload: () -> Unit)
                 } else {
                     Text("Not downloaded yet", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
                 }
-                FilledTonalButton(onClick = onDownload) {
-                    Icon(Icons.Outlined.CloudDownload, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (status is ModelStatus.Failed) "Retry" else "Download")
-                }
+                PillButton(if (status is ModelStatus.Failed) "try again" else "download", onDownload)
             }
             ModelStatus.Unknown -> {
                 CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
@@ -192,16 +147,16 @@ fun ErrorCard(message: String) {
     }
 }
 
+/** A titled section of a lab page: a hand-lettered head over its content, no card. */
 @Composable
 fun SectionCard(
     title: String,
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Card(modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-            content()
-        }
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        HandDivider()
+        SectionHead(title.lowercase())
+        content()
     }
 }

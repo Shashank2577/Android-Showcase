@@ -1,46 +1,30 @@
-@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+
 
 package com.showcase.desertant.ui.people
 
+import ai.desertant.gist.PostTopics
+import ai.desertant.gist.RollupOptions
+import ai.desertant.gist.channelTopics
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -51,12 +35,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import ai.desertant.gist.PostTopics
-import ai.desertant.gist.RollupOptions
-import ai.desertant.gist.channelTopics
 import com.showcase.desertant.app
 import com.showcase.desertant.audio.AudioRecorder
 import com.showcase.desertant.audio.formatClock
@@ -64,12 +45,24 @@ import com.showcase.desertant.audio.resample
 import com.showcase.desertant.core.languageName
 import com.showcase.desertant.data.MeetingStatus
 import com.showcase.desertant.people.People
-import com.showcase.desertant.ui.hand.ConfirmSheet
-import com.showcase.desertant.ui.common.Avatar
 import com.showcase.desertant.ui.common.dateTime
-import com.showcase.desertant.ui.components.ScoreBar
+import com.showcase.desertant.ui.hand.Body
+import com.showcase.desertant.ui.hand.ConfirmSheet
+import com.showcase.desertant.ui.hand.DoneNote
+import com.showcase.desertant.ui.hand.Doodle
+import com.showcase.desertant.ui.hand.Door
+import com.showcase.desertant.ui.hand.HandDivider
+import com.showcase.desertant.ui.hand.HandField
+import com.showcase.desertant.ui.hand.HandPage
+import com.showcase.desertant.ui.hand.HandProgress
+import com.showcase.desertant.ui.hand.HandSheet
+import com.showcase.desertant.ui.hand.InkButton
+import com.showcase.desertant.ui.hand.Meta
+import com.showcase.desertant.ui.hand.PillButton
+import com.showcase.desertant.ui.hand.SectionHead
 import com.showcase.desertant.ui.meetings.decodeTopics
-import com.showcase.desertant.ui.theme.seriesColor
+import com.showcase.desertant.ui.theme.Hand
+import com.showcase.desertant.ui.theme.burrow
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -103,98 +96,78 @@ fun PersonContent(id: Long, open: (String) -> Unit, embedded: Boolean, onBack: (
     val topicNames = remember(mine) { mine.flatMap { decodeTopics(it.topicsJson) }.associate { it.slug to it.name } }
     val languages = mine.mapNotNull { it.language }.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.map { it.key }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(if (embedded) "" else p.name) },
-                navigationIcon = { if (!embedded) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
-                actions = {
-                    Box {
-                        IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "More") }
-                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                            DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; renaming = true })
-                            DropdownMenuItem(text = { Text("Forget this person") }, onClick = { menu = false; deleting = true })
-                        }
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
-            LazyColumn(
-                Modifier.widthIn(max = 760.dp).fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                item {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(p.name, seriesColor(p.colorIndex), 72.dp)
-                        Spacer(Modifier.width(16.dp))
-                        Column {
-                            Text(if (p.isMe) "${p.name} (you)" else p.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                "${mine.map { it.meetingId }.distinct().size} conversations · ${formatClock(totalTalk)} talking",
-                                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            if (languages.isNotEmpty()) Text("Speaks ${languages.joinToString(", ") { languageName(it) }}", style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
-                item { VoiceCard(p.signatureCount) { samples -> people.enroll(id, samples) } }
-                if (topics.isNotEmpty()) item {
-                    ElevatedCard {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("What they talk about", style = MaterialTheme.typography.titleMedium)
-                            topics.forEach { t -> ScoreBar(topicNames[t.slug] ?: t.slug, t.share, color = seriesColor(p.colorIndex)) }
-                        }
-                    }
-                }
-                val quotes = mine.mapNotNull { s -> s.sampleQuote?.let { it to byId[s.meetingId] } }.take(4)
-                if (quotes.isNotEmpty()) item {
-                    ElevatedCard {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text("In their words", style = MaterialTheme.typography.titleMedium)
-                            quotes.forEach { (q, m) ->
-                                Column {
-                                    Text("“$q”", style = MaterialTheme.typography.bodyLarge)
-                                    m?.let { Text(it.title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                                }
-                            }
-                        }
-                    }
-                }
-                item { Text("Conversations", style = MaterialTheme.typography.titleMedium) }
-                if (mine.isEmpty()) item { Text("Not linked to any meeting yet. Name them as a speaker in a meeting's notes.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                items(mine, key = { it.id }) { s ->
-                    val m = byId[s.meetingId] ?: return@items
-                    val share = s.talkSec / (m.durationSec.coerceAtLeast(1.0))
-                    ElevatedCard(onClick = { open("meeting/${m.id}") }) {
-                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(m.title, style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                "${dateTime(context, m.createdAt)} · spoke ${formatClock(s.talkSec)} (${"%.0f".format(share * 100)}%)",
-                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            val t = decodeTopics(s.topicsJson)
-                            if (t.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                t.forEach { Text(it.name, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary) }
-                            }
-                        }
-                    }
+    HandPage(
+        onBack = if (embedded) null else onBack,
+        topEnd = {
+            Box {
+                PillButton("options ▾", { menu = true }, Modifier.padding(end = 8.dp))
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; renaming = true })
+                    DropdownMenuItem(text = { Text("Forget this person") }, onClick = { menu = false; deleting = true })
                 }
             }
+        },
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(64.dp).border(2.dp, burrow.ink, CircleShape), contentAlignment = Alignment.Center) {
+                Text(p.name.trim().take(1).uppercase().ifEmpty { "?" }, style = Hand.headline, color = burrow.ink)
+            }
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(if (p.isMe) "${p.name} (you)" else p.name, style = Hand.headline.copy(fontSize = 36.sp), color = burrow.ink)
+                Meta(
+                    listOfNotNull(
+                        mine.map { it.meetingId }.distinct().size.let { if (it == 1) "1 talk" else "$it talks" },
+                        "${formatClock(totalTalk)} talking",
+                        languages.takeIf { it.isNotEmpty() }?.joinToString(", ") { languageName(it) },
+                    ).joinToString(" · "),
+                )
+            }
+        }
+        Spacer(Modifier.height(20.dp))
+        VoiceSection(p.signatureCount) { samples -> people.enroll(id, samples) }
+        if (topics.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            SectionHead("what you talk about")
+            topics.forEach { t ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text((topicNames[t.slug] ?: t.slug).lowercase(), Modifier.width(120.dp), style = Hand.label, color = burrow.ink)
+                    HandProgress(t.share.toFloat(), Modifier.weight(1f))
+                }
+            }
+        }
+        val quotes = mine.mapNotNull { s -> s.sampleQuote?.let { it to byId[s.meetingId] } }.take(4)
+        if (quotes.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            SectionHead("in their words")
+            quotes.forEach { (q, m) ->
+                Column(Modifier.padding(vertical = 6.dp)) {
+                    Body("“$q”")
+                    m?.let { Meta(it.title) }
+                }
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        SectionHead("talks together", note = "tap one to open its notes")
+        if (mine.isEmpty()) Meta("Not in any talk yet. Open a talk's notes and tap “name them” next to their voice.")
+        mine.forEachIndexed { n, s ->
+            val m = byId[s.meetingId] ?: return@forEachIndexed
+            if (n > 0) HandDivider(seed = n)
+            Door(
+                m.title, { open("meeting/${m.id}") },
+                meta = "${dateTime(context, m.createdAt)} · spoke ${formatClock(s.talkSec)} (${"%.0f".format(s.talkSec / m.durationSec.coerceAtLeast(1.0) * 100)}%)",
+                style = Hand.door,
+            )
         }
     }
 
     if (renaming) {
         var name by remember { mutableStateOf(p.name) }
-        AlertDialog(
-            onDismissRequest = { renaming = false },
-            title = { Text("Rename") },
-            text = { OutlinedTextField(name, { name = it }, singleLine = true) },
-            confirmButton = { TextButton(onClick = { scope.launch { people.rename(id, name) }; renaming = false }) { Text("Save") } },
-            dismissButton = { TextButton(onClick = { renaming = false }) { Text("Cancel") } },
-        )
+        HandSheet({ renaming = false }) {
+            Text("rename", style = Hand.headline.copy(fontSize = 34.sp), color = burrow.ink)
+            HandField(name, { name = it }, singleLine = true)
+            InkButton("save", { scope.launch { people.rename(id, name) }; renaming = false }, Modifier.fillMaxWidth(), enabled = name.isNotBlank())
+        }
     }
     if (deleting) {
         ConfirmSheet(
@@ -208,9 +181,9 @@ fun PersonContent(id: Long, open: (String) -> Unit, embedded: Boolean, onBack: (
     }
 }
 
-/** Shows how well the voice is known and records a dedicated sample to improve it. */
+/** How well Burrow knows their voice, and a 15-second sample to teach it. */
 @Composable
-private fun VoiceCard(samples: Int, onSample: suspend (FloatArray) -> Boolean) {
+private fun VoiceSection(samples: Int, onSample: suspend (FloatArray) -> Boolean) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val recorder = remember { AudioRecorder() }
@@ -226,36 +199,34 @@ private fun VoiceCard(samples: Int, onSample: suspend (FloatArray) -> Boolean) {
             val clip = recorder.record(maxSeconds = 25.0) { _, s -> seconds = s }
             recording = false
             val ok = onSample(resample(clip.samples, clip.sampleRate, 16_000))
-            message = if (ok) "Voice sample learned." else "Too little speech heard — try again and keep talking for 15 seconds."
+            message = if (ok) "Got it — their voice is learned a little better." else "Too little speech heard. Try again and keep them talking for 15 seconds."
         }
     }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { if (it) record() }
 
-    ElevatedCard {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Voice", style = MaterialTheme.typography.titleMedium)
-            Text(
-                when (samples) {
-                    0 -> "Not learned yet. Confirm them in a meeting, or record a sample here."
-                    in 1..2 -> "Learned from $samples recording${if (samples > 1) "s" else ""} — suggestions get better with each one."
-                    else -> "Learned from $samples recordings."
-                },
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            LinearProgressIndicator(progress = { (samples / 5f).coerceAtMost(1f) }, modifier = Modifier.fillMaxWidth())
-            if (recording) {
-                Text("Have them talk naturally… ${"%.0f".format(seconds)}s / 15s", style = MaterialTheme.typography.bodyMedium)
-                LinearProgressIndicator(progress = { (seconds / 15).toFloat().coerceAtMost(1f) }, modifier = Modifier.fillMaxWidth())
-                Button(onClick = { recorder.stop() }) {
-                    Icon(Icons.Filled.Stop, null); Spacer(Modifier.width(6.dp)); Text(if (seconds >= 15) "Done" else "Stop")
-                }
-            } else {
-                TextButton(onClick = {
-                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) record()
-                    else permission.launch(Manifest.permission.RECORD_AUDIO)
-                }) { Icon(Icons.Filled.Mic, null); Spacer(Modifier.width(6.dp)); Text("Record a voice sample") }
-            }
-            message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
-        }
+    SectionHead("their voice", note = "only on this phone")
+    Body(
+        when (samples) {
+            0 -> "Not learned yet. Name them in a talk, or record a short sample here, and Burrow will suggest them in future talks."
+            in 1..2 -> "Learned from $samples sample${if (samples > 1) "s" else ""}. Each one makes suggestions better."
+            else -> "Learned from $samples samples — Burrow knows this voice well."
+        },
+        color = burrow.pencil,
+    )
+    HandProgress((samples / 5f).coerceAtMost(1f), Modifier.padding(vertical = 6.dp))
+    if (recording) {
+        Text("have them talk naturally… ${"%.0f".format(seconds)} of 15 s", style = Hand.label, color = burrow.ink)
+        HandProgress((seconds / 15).toFloat().coerceAtMost(1f))
+        PillButton(if (seconds >= 15) "done" else "stop", { recorder.stop() }, Modifier.padding(top = 6.dp), leading = Doodle.STOP)
+    } else {
+        PillButton(
+            "record a 15-second sample",
+            {
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) record()
+                else permission.launch(Manifest.permission.RECORD_AUDIO)
+            },
+            leading = Doodle.MIC,
+        )
     }
+    message?.let { DoneNote(it, Modifier.padding(top = 8.dp)) }
 }

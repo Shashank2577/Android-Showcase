@@ -46,10 +46,12 @@ import com.showcase.desertant.ui.hand.HandField
 import com.showcase.desertant.ui.hand.HandLink
 import com.showcase.desertant.ui.hand.HandPage
 import com.showcase.desertant.ui.hand.InkButton
-import com.showcase.desertant.ui.hand.MarkedText
 import com.showcase.desertant.ui.hand.Meta
 import com.showcase.desertant.ui.hand.OnDeviceStamp
-import com.showcase.desertant.ui.hand.SectionHead
+import com.showcase.desertant.ui.hand.PageIntro
+import com.showcase.desertant.ui.hand.PillButton
+import com.showcase.desertant.ui.hand.StepHead
+import com.showcase.desertant.ui.privacy.SecureScreen
 import com.showcase.desertant.ui.theme.Hand
 import com.showcase.desertant.ui.theme.Inter
 import com.showcase.desertant.ui.theme.burrow
@@ -67,6 +69,7 @@ private val PLACEHOLDER = Regex("""\[[A-Z][A-Z_]*_\d+]""")
  */
 @Composable
 fun MaskScreen(onBack: (() -> Unit)?, initial: String = "", onReplace: ((String) -> Unit)? = null) {
+    SecureScreen()
     val context = LocalContext.current
     val session = context.app.mask
     val scope = rememberCoroutineScope()
@@ -88,9 +91,12 @@ fun MaskScreen(onBack: (() -> Unit)?, initial: String = "", onReplace: ((String)
 
     val current = masked?.takeIf { it.original == text }
     HandPage(onBack = onBack, topEnd = { OnDeviceStamp(Modifier.padding(end = 12.dp)) }) {
-        MarkedText("mask a message.", mark = "mask", style = Hand.headline.copy(fontSize = 44.sp))
-        Meta("Paste it here before it goes into ChatGPT, an email or a form.", Modifier.padding(top = 4.dp))
-        Spacer(Modifier.height(18.dp))
+        PageIntro(
+            "mask a message.",
+            "Before text goes into ChatGPT, an email or a form, Burrow swaps names, numbers and addresses for placeholders. Paste the reply back and the real details return.",
+            mark = "mask",
+        )
+        StepHead(1, "paste your text", done = current != null)
         HandField(text, { text = it }, placeholder = "Hi, I'm Sam Carter, card 4111 1111 1111 1111 — call me on +44 7700 900123…", minHeight = 120.dp)
         Spacer(Modifier.height(12.dp))
         if (current == null) {
@@ -108,9 +114,8 @@ fun MaskScreen(onBack: (() -> Unit)?, initial: String = "", onReplace: ((String)
                 )
                 current.language?.let { Meta("  ·  ${languageName(it).lowercase()}") }
             }
-            Spacer(Modifier.height(16.dp))
-            SectionHead("safe to share", note = "names & numbers swapped")
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
+            StepHead(2, "copy the safe version")
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -135,12 +140,12 @@ fun MaskScreen(onBack: (() -> Unit)?, initial: String = "", onReplace: ((String)
             )
             if (onReplace != null) HandLink("copy it instead", { copy(context, current.text, sensitive = false) }, Modifier.align(Alignment.CenterHorizontally))
 
-            Spacer(Modifier.height(28.dp))
-            SectionHead("restore the reply")
-            Meta("Paste what the AI wrote back. Burrow swaps the real details in again.")
+            Spacer(Modifier.height(24.dp))
+            StepHead(3, "bring the reply back", done = reply.isNotBlank())
+            Meta("Paste what the AI wrote. Burrow puts the real details back in, here on the phone.")
             Spacer(Modifier.height(10.dp))
             HandField(reply, { reply = it }, placeholder = "Dear [NAME_1], your order to [ADDRESS_1]…", minHeight = 96.dp)
-            HandLink("paste from clipboard", { paste(context)?.let { reply = it } })
+            PillButton("paste from clipboard", { paste(context)?.let { reply = it } }, Modifier.padding(top = 8.dp))
             if (reply.isNotBlank()) {
                 val restored = session.restore(reply)
                 Spacer(Modifier.height(8.dp))
@@ -156,7 +161,7 @@ fun MaskScreen(onBack: (() -> Unit)?, initial: String = "", onReplace: ((String)
                 }, Modifier.fillMaxWidth())
             }
             Spacer(Modifier.height(16.dp))
-            HandLink("mask something else", { session.clear(); text = ""; reply = "" })
+            PillButton("start over with new text", { session.clear(); text = ""; reply = "" }, leading = Doodle.PLUS)
         }
         Spacer(Modifier.height(20.dp))
         Meta("Found on this phone by Redact. Nothing is stored; Burrow forgets this in 30 minutes or when you close it.")

@@ -9,7 +9,7 @@ Burrow is an Android app that handles six everyday jobs end to end, using small 
 | Tidy: keep the best shot of each moment, let the rest go | photos | Eye |
 | Private sweep and vault: IDs, cards, medical and intimate photos taken out of the gallery and encrypted | photos → private things | Eye, then Moderator to confirm intimate photos |
 | Share safely: check a photo before it leaves | Android share sheet → *Check with Burrow* | Eye, Moderator, plus the photo's EXIF data |
-| Talks: record a conversation and get notes, who spoke when, and follow-ups | talks | Clear, Ear, Voz, Who, Gist, Redact |
+| Talks: record a conversation and get notes, who spoke when, and follow-ups | talks | Clear, Ear, Voz, Who, Gist, Redact; Hindi via AI4Bharat IndicConformer |
 | People: name a voice once and Burrow suggests that person afterwards | people | Who, plus Burrow's own voice signature |
 | Mask: swap secrets for placeholders before text goes to an AI, then put them back in the reply | today → mask, any app's text-selection menu → *Mask with Burrow* | Redact, Tongue |
 
@@ -59,11 +59,22 @@ Who tells speakers apart within one recording. Burrow links them across recordin
 
 During the photo scan, Eye flags IDs and bank cards, receipts, medical photos and documents. Any photo Eye thinks might be intimate gets a second check from **Moderator**. *photos → private things* lists what it found, blurred. One move puts the photos in the **vault**:
 
-- Each photo, its thumbnail and the vault's index are encrypted with **AES-256-GCM**. The key lives in the **Android Keystore** and can't be exported, and it only works for two minutes after you confirm with your **fingerprint or screen lock**.
+- Each photo, its thumbnail and the vault's index are encrypted with **AES-256-GCM** under a random data key.
+- That data key is stored only wrapped by an **Android Keystore** key that can't be exported and needs your **fingerprint or screen lock for every use**. Opening the vault is one prompt bound to that unwrap (a `BiometricPrompt.CryptoObject`), so it behaves the same on every phone and never "times out" in the middle of adding photos.
+- If the screen lock is removed, Android destroys the key. Burrow says so plainly and offers to start a new, empty vault.
 - The vault lives in `noBackupFilesDir`, and the app opts out of backup, so the vault never reaches a cloud backup. The gallery and other apps can't see it.
 - Once the photos are copied in, Android asks you to delete the originals. If you say no, the vault copies are removed again.
 - The vault locks as soon as you leave Burrow, and it forgets its decrypted thumbnails when it does.
 - You can put any photo back in the gallery (*Pictures/Burrow*), or delete it for good.
+
+## Talks in Hindi
+
+Ear identifies the spoken language of each talk. Voz covers 25 European languages; when Ear hears **Hindi**, Burrow transcribes it with **AI4Bharat's IndicConformer** instead, running on the phone with ONNX Runtime:
+
+- **The model:** a community int8, CTC-only sherpa-onnx export of IndicConformer for Hindi ([`ngiftsun/indicconformer-hi-int8-sherpa`](https://huggingface.co/ngiftsun/indicconformer-hi-int8-sherpa), derived from [`ai4bharat/indic-conformer-600m-multilingual`](https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual), MIT licence). It's about 140 MB and is downloaded only when you ask, from *privacy → the models & languages*, from onboarding, or from a Hindi talk's page.
+- **How it runs:** 80-band log-mel features computed NeMo-style in Kotlin, the audio fed in roughly 20-second pieces cut at pauses, then greedy CTC decoding into words with timings. Diarization, people and the transcript work as for any talk. Topics and follow-ups are skipped for now, because Gist and the follow-up phrases are tuned for European languages.
+- **Without the model:** a Hindi talk stops with a clear "download Hindi" step, instead of producing a garbled transcript.
+- **More languages:** add another IndicConformer language with one more entry in `speech/IndicSpeech.kt`.
 
 ## Share safely
 
@@ -98,7 +109,7 @@ It also has switches, and each one is enforced in code:
 - **lock with fingerprint**: Burrow asks again when you come back after 30 seconds away.
 - **delete talk audio after 30 days**: the notes and transcript stay.
 - **learn voices when I name someone**: when this is off, naming a speaker teaches Burrow nothing.
-- **hide from screenshots and recents**: sets `FLAG_SECURE` and disables the recents screenshot.
+- **hide every screen from screenshots**: off by default, so you can share screenshots of Burrow. The vault, the private sweep and the mask screen are always blocked from screenshots and the recent-apps preview.
 
 **Wipe everything** forgets every analysis, talk and its audio, person and voice, the vault, the ledger and the settings, with the downloaded models as an option. Your gallery isn't touched. *Forget this person* deletes one person's voice and unlinks them from every talk.
 

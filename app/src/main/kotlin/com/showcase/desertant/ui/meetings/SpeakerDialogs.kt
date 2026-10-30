@@ -1,25 +1,21 @@
 package com.showcase.desertant.ui.meetings
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,24 +23,36 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.showcase.desertant.app
 import com.showcase.desertant.data.MeetingSpeakerEntity
 import com.showcase.desertant.data.ProfileEntity
-import com.showcase.desertant.people.People
-import com.showcase.desertant.people.ProfileMatcher
 import com.showcase.desertant.data.StoreJson
 import com.showcase.desertant.data.VoiceSignature
-import com.showcase.desertant.ui.common.Avatar
-import com.showcase.desertant.ui.theme.seriesColor
+import com.showcase.desertant.people.People
+import com.showcase.desertant.people.ProfileMatcher
+import com.showcase.desertant.ui.hand.Body
+import com.showcase.desertant.ui.hand.HandField
+import com.showcase.desertant.ui.hand.HandLink
+import com.showcase.desertant.ui.hand.HandSheet
+import com.showcase.desertant.ui.hand.InkButton
+import com.showcase.desertant.ui.hand.Meta
+import com.showcase.desertant.ui.hand.SwitchRow
+import com.showcase.desertant.ui.theme.Hand
+import com.showcase.desertant.ui.theme.burrow
 import kotlinx.coroutines.launch
 
-/** Link a meeting voice to a person: someone known (ranked by voice match), you, or someone new. */
+/** "Who is this?" — pick a person (best voice match first), or name someone new. */
 @Composable
 fun AssignSpeakerDialog(speaker: MeetingSpeakerEntity, profiles: List<ProfileEntity>, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val people = remember { People(context) }
+    val learn by context.app.privacy.learnVoices.collectAsState()
     val scores = remember(speaker.id, profiles) {
         speaker.signatureJson?.let { json ->
             val sig = runCatching { StoreJson.decodeFromString(VoiceSignature.serializer(), json) }.getOrNull()
@@ -52,66 +60,65 @@ fun AssignSpeakerDialog(speaker: MeetingSpeakerEntity, profiles: List<ProfileEnt
         }.orEmpty()
     }
     val ranked = profiles.sortedByDescending { scores[it.id] ?: -1.0 }
-    var choice by remember { mutableStateOf<Long?>(speaker.profileId ?: speaker.suggestedProfileId) }
+    var choice by remember { mutableStateOf<Long?>(speaker.profileId ?: speaker.suggestedProfileId ?: if (profiles.isEmpty()) NEW else null) }
     var newName by remember { mutableStateOf("") }
     var isMe by remember { mutableStateOf(profiles.none { it.isMe }) }
+    val ready = (choice == NEW && newName.isNotBlank()) || (choice != null && choice != NEW)
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Who is Speaker ${speaker.index + 1}?") },
-        text = {
-            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                speaker.sampleQuote?.let {
-                    Text("“$it”", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    HandSheet(onDismiss) {
+        Text("who is this voice?", style = Hand.headline.copy(fontSize = 34.sp), color = burrow.ink)
+        speaker.sampleQuote?.let { Body("“$it”") }
+        Meta(
+            if (learn) "Pick a person. Burrow learns their voice from this talk, so it can suggest them next time."
+            else "Pick a person. Voice learning is off, so this only labels this talk.",
+        )
+        ranked.forEach { p ->
+            Choice(if (p.isMe) "${p.name} (you)" else p.name, scores[p.id]?.let { "${"%.0f".format(it * 100)}% voice match" }, choice == p.id) { choice = p.id }
+        }
+        Choice("someone new", null, choice == NEW) { choice = NEW }
+        if (choice == NEW) {
+            HandField(newName, { newName = it }, placeholder = "their name", singleLine = true)
+            SwitchRow("this is me", isMe, { isMe = it })
+        }
+        InkButton(
+            "save",
+            {
+                val c = choice
+                scope.launch {
+                    if (c == NEW) people.createFromSpeaker(speaker.id, newName, isMe) else if (c != null) people.assign(speaker.id, c)
+                    onDismiss()
                 }
-                ranked.forEach { p ->
-                    Row(Modifier.fillMaxWidth().clickable { choice = p.id }, verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = choice == p.id, onClick = { choice = p.id })
-                        Avatar(p.name, seriesColor(p.colorIndex), 28.dp)
-                        Spacer(Modifier.width(10.dp))
-                        Text(if (p.isMe) "${p.name} (you)" else p.name, modifier = Modifier.weight(1f))
-                        scores[p.id]?.let { Text("${"%.0f".format(it * 100)}%", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                    }
-                }
-                if (ranked.isNotEmpty()) HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = choice == NEW, onClick = { choice = NEW })
-                    OutlinedTextField(
-                        value = newName, onValueChange = { newName = it; choice = NEW },
-                        label = { Text("New person") }, singleLine = true,
-                    )
-                }
-                if (choice == NEW) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { isMe = !isMe }) {
-                        Checkbox(checked = isMe, onCheckedChange = { isMe = it })
-                        Text("This is me")
-                    }
-                }
-                Text(
-                    "Each person you confirm teaches Burrow their voice, so it can suggest them in future meetings.",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = (choice == NEW && newName.isNotBlank()) || (choice != null && choice != NEW),
-                onClick = {
-                    val c = choice
-                    scope.launch {
-                        if (c == NEW) people.createFromSpeaker(speaker.id, newName, isMe) else if (c != null) people.assign(speaker.id, c)
-                        onDismiss()
-                    }
-                },
-            ) { Text("Save") }
-        },
-        dismissButton = {
-            Row {
-                if (speaker.profileId != null) TextButton(onClick = { scope.launch { people.unassign(speaker.id); onDismiss() } }) { Text("Unlink") }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
-            }
-        },
-    )
+            },
+            Modifier.fillMaxWidth(),
+            enabled = ready,
+        )
+        if (speaker.profileId != null) {
+            HandLink("not them — unlink", { scope.launch { people.unassign(speaker.id); onDismiss() } }, Modifier.align(Alignment.CenterHorizontally))
+        }
+    }
+}
+
+/** A radio row drawn in ink: an empty ring, or a filled one when chosen. */
+@Composable
+private fun Choice(title: String, note: String?, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .then(if (selected) Modifier.background(burrow.smudge) else Modifier)
+            .clickable(role = Role.RadioButton, onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(22.dp).border(1.8.dp, burrow.ink, CircleShape), contentAlignment = Alignment.Center) {
+            if (selected) Box(Modifier.size(12.dp).clip(CircleShape).background(burrow.ink))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = Hand.door.copy(fontSize = 23.sp), color = burrow.ink)
+            if (note != null) Meta(note)
+        }
+    }
 }
 
 private const val NEW = -1L

@@ -20,11 +20,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.showcase.desertant.app
 import com.showcase.desertant.data.MeetingStatus
 import com.showcase.desertant.meetings.RecorderService
 import com.showcase.desertant.meetings.RecorderState
+import com.showcase.desertant.photos.PhotoScanWorker
 import com.showcase.desertant.privacy.LedgerEntry
+import com.showcase.desertant.speech.IndicSpeech
 import com.showcase.desertant.ui.common.formatBytes
 import com.showcase.desertant.ui.hand.Body
 import com.showcase.desertant.ui.hand.Doodle
@@ -54,6 +58,8 @@ fun TodayScreen(open: (String) -> Unit) {
     val profiles by remember { app.db.profiles().all() }.collectAsState(initial = emptyList())
     val recorder by RecorderService.state.collectAsState()
     val ledgerVersion by app.ledger.version.collectAsState()
+    val work by remember { WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow(PhotoScanWorker.UNIQUE) }.collectAsState(initial = emptyList())
+    val scan = work.firstOrNull { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }
 
     val now = LocalDateTime.now()
     val greeting = when (now.hour) {
@@ -75,9 +81,17 @@ fun TodayScreen(open: (String) -> Unit) {
             now.format(DateTimeFormatter.ofPattern("EEE d MMM")) + "  ·  " +
                 if (checkedToday > 0) "$checkedToday photos checked, all on this phone" else "everything stays on this phone",
         )
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(8.dp))
+        Body("Only what needs you. Tap a line to deal with it.", color = burrow.pencil)
+        Spacer(Modifier.height(20.dp))
 
         var doors = 0
+        scan?.let { w ->
+            val done = w.progress.getInt(PhotoScanWorker.KEY_DONE, 0)
+            val total = w.progress.getInt(PhotoScanWorker.KEY_TOTAL, 0)
+            Door("looking through your photos…", { open("photos") }, meta = if (total > 0) "$done of $total checked — keeps going if you leave" else "getting ready")
+            doors++
+        }
         (recorder as? RecorderState.Recording)?.let {
             Door("recording now — tap to see it", { open("record") }, mark = "recording now")
             doors++
@@ -86,7 +100,7 @@ fun TodayScreen(open: (String) -> Unit) {
         val i = insights
         val tidyBytes = (i?.duplicateBytes ?: 0) + (i?.junkBytes ?: 0)
         when {
-            i == null || i.analyzed == 0 -> {
+            scan == null && (i == null || i.analyzed == 0) -> {
                 Door("let Burrow look through your photos", { open("photos") }, meta = "it finds extra shots and private things, on the phone")
                 doors++
             }
@@ -106,7 +120,10 @@ fun TodayScreen(open: (String) -> Unit) {
             when (m.status) {
                 MeetingStatus.READY -> Door("${m.title} — notes are ready", { open("meeting/${m.id}") })
                 MeetingStatus.QUEUED, MeetingStatus.PROCESSING -> Door("${m.title} — writing notes…", { open("meeting/${m.id}") }, meta = m.progress)
-                MeetingStatus.FAILED -> Door("${m.title} — couldn't finish", { open("meeting/${m.id}") }, meta = "open to try again")
+                MeetingStatus.FAILED -> Door(
+                    "${m.title} — needs you", { open("meeting/${m.id}") },
+                    meta = IndicSpeech.languageFor(m.language)?.let { "it's in ${it.name}: get ${it.name} to write its notes" } ?: "the notes couldn't be written; open it to try again",
+                )
                 MeetingStatus.RECORDING -> Unit
             }
             if (m.status != MeetingStatus.RECORDING) doors++

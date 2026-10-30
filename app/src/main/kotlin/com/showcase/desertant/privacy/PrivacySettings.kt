@@ -27,7 +27,7 @@ class PrivacySettings(context: Context) {
     private val _lockApp = flag(LOCK_APP, false)
     private val _autoDeleteAudio = flag(AUTO_DELETE_AUDIO, false)
     private val _learnVoices = flag(LEARN_VOICES, true)
-    private val _secureScreens = flag(SECURE_SCREENS, true)
+    private val _secureScreens = flag(SECURE_SCREENS, false)
 
     val onboarded: StateFlow<Boolean> = _onboarded.asStateFlow()
     val neverOnline: StateFlow<Boolean> = _neverOnline.asStateFlow()
@@ -55,7 +55,7 @@ class PrivacySettings(context: Context) {
         _lockApp.value = false
         _autoDeleteAudio.value = false
         _learnVoices.value = true
-        _secureScreens.value = true
+        _secureScreens.value = false
     }
 
     private companion object {

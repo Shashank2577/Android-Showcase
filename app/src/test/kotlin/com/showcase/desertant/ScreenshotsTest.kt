@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
@@ -40,6 +41,13 @@ import com.showcase.desertant.ui.privacy.PrivacyScreen
 import com.showcase.desertant.ui.share.ShareCheckScreen
 import com.showcase.desertant.ui.shell.BurrowApp
 import com.showcase.desertant.ui.theme.BurrowTheme
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.builtins.ListSerializer
 import org.junit.Before
@@ -112,6 +120,13 @@ class ScreenshotsTest {
             ),
         )
         db.meetings().insert(
+            MeetingEntity(
+                title = "Hindi talk · Tue 28 Oct, 18:05", createdAt = now - 30 * 3_600_000L, durationSec = 840.0, audioPath = "/nonexistent4.m4a",
+                status = MeetingStatus.FAILED, language = "hi", languageSupported = false,
+                error = "This talk is in Hindi. Download Hindi (about 140 MB, once) and Burrow can write its notes.",
+            ),
+        )
+        db.meetings().insert(
             MeetingEntity(title = "design crit", createdAt = now - 20 * 60_000L, durationSec = 1860.0, audioPath = "/nonexistent3.m4a", status = MeetingStatus.PROCESSING, progress = "Transcribing part 2 of 3"),
         )
         db.speakers().insert(
@@ -165,6 +180,50 @@ class ScreenshotsTest {
         show { BurrowApp(app.hub, "meeting/1") {} }
         compose.waitForIdle()
         shot("07-talk-notes")
+    }
+
+    @Test fun person() {
+        show { com.showcase.desertant.ui.people.PersonScreen(2, {}, {}) }
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Priya Shah", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        shot("16-person")
+    }
+
+    @Test fun models() { show { com.showcase.desertant.ui.settings.SettingsScreen({}, {}) }; shot("17-models") }
+
+    @Test fun recordings() { show { com.showcase.desertant.ui.meetings.DeviceRecordingsScreen {} }; shot("18-call-recordings") }
+
+    @Test fun hindiTalk() {
+        show { BurrowApp(app.hub, "meeting/3") {} }
+        compose.waitForIdle()
+        shot("19-hindi-talk")
+    }
+
+    @Test fun icon() {
+        show {
+            androidx.compose.foundation.layout.Row(
+                androidx.compose.ui.Modifier.background(androidx.compose.ui.graphics.Color(0xFFDDDDDD)).padding(24.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(24.dp),
+            ) {
+                listOf(androidx.compose.foundation.shape.CircleShape, androidx.compose.foundation.shape.RoundedCornerShape(30)).forEach { shape ->
+                    androidx.compose.foundation.layout.Box(
+                        androidx.compose.ui.Modifier.size(150.dp).clip(shape).background(androidx.compose.ui.graphics.Color(0xFFFFE45C)),
+                    ) {
+                        androidx.compose.foundation.Image(
+                            androidx.compose.ui.res.painterResource(R.drawable.ic_launcher_foreground), null,
+                            androidx.compose.ui.Modifier.matchParentSize().scale(1.5f),
+                        )
+                    }
+                }
+                androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.requiredSize(150.dp).clip(androidx.compose.foundation.shape.CircleShape).background(androidx.compose.ui.graphics.Color(0xFF2B2F3A))) {
+                    androidx.compose.foundation.Image(
+                        androidx.compose.ui.res.painterResource(R.drawable.ic_launcher_foreground), null,
+                        androidx.compose.ui.Modifier.matchParentSize().scale(1.5f),
+                        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(androidx.compose.ui.graphics.Color(0xFFC9D4F2)),
+                    )
+                }
+            }
+        }
+        shot("20-icon")
     }
 
     @Test fun record() { show { RecordScreen({}, {}) }; shot("08-record") }

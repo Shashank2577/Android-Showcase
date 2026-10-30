@@ -16,12 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -35,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.showcase.desertant.app
 import com.showcase.desertant.audio.formatClock
 import com.showcase.desertant.data.MeetingEntity
@@ -49,11 +45,15 @@ import com.showcase.desertant.ui.hand.DoodleButton
 import com.showcase.desertant.ui.hand.DoodleIcon
 import com.showcase.desertant.ui.hand.HandDivider
 import com.showcase.desertant.ui.hand.HandEmpty
+import com.showcase.desertant.ui.hand.HandField
 import com.showcase.desertant.ui.hand.HandPage
-import com.showcase.desertant.ui.hand.MarkedText
+import com.showcase.desertant.ui.hand.HandSheet
+import com.showcase.desertant.ui.hand.InkButton
 import com.showcase.desertant.ui.hand.Meta
+import com.showcase.desertant.ui.hand.PageIntro
+import com.showcase.desertant.ui.hand.PillButton
 import com.showcase.desertant.ui.hand.SectionHead
-import com.showcase.desertant.ui.hand.handUnderline
+import com.showcase.desertant.ui.hand.SwitchRow
 import com.showcase.desertant.ui.meetings.AssignSpeakerDialog
 import com.showcase.desertant.ui.meetings.decodeTopics
 import com.showcase.desertant.ui.shell.LocalWideLayout
@@ -79,15 +79,17 @@ fun PeopleHome(open: (String) -> Unit) {
         .sortedByDescending { ready[it.meetingId]?.createdAt ?: 0 }
 
     val list = @Composable {
-        HandPage(topEnd = {
-            DoodleButton(Doodle.PLUS, "Add person", { adding = true })
-            DoodleButton(Doodle.LOCK, "Privacy", { open("privacy") })
-        }) {
-            MarkedText("people", mark = "people", style = Hand.headline)
-            Meta(if (learnVoices) "voices are learned only when you name someone" else "voice learning is off", Modifier.padding(top = 2.dp))
+        HandPage(topEnd = { DoodleButton(Doodle.LOCK, "Privacy", { open("privacy") }) }) {
+            PageIntro(
+                "people",
+                if (learnVoices) "Everyone you've named in a talk: what you talk about and every conversation. Burrow learns a voice only when you name someone."
+                else "Everyone you've named in a talk. Voice learning is off, so Burrow won't suggest people in new talks.",
+            )
+            PillButton("add someone", { adding = true }, leading = Doodle.PLUS)
             Spacer(Modifier.height(20.dp))
             if (unnamed.isNotEmpty()) {
                 SectionHead("voices to name — ${unnamed.size}", note = "needs you")
+                Meta("Voices Burrow heard in your talks but doesn't know yet. Name each one once.")
                 Spacer(Modifier.height(4.dp))
                 unnamed.take(6).forEachIndexed { n, s ->
                     if (n > 0) HandDivider(seed = n + 3)
@@ -139,7 +141,7 @@ private fun UnnamedVoice(s: MeetingSpeakerEntity, meeting: MeetingEntity?, sugge
             Meta("${meeting?.title ?: "a talk"} · ${formatClock(s.talkSec)} of talking", maxLines = 1)
         }
         Spacer(Modifier.width(10.dp))
-        Text(suggestion?.let { "${it.name.substringBefore(' ')}?" } ?: "who is this?", Modifier.handUnderline(burrow.ink), style = Hand.small, color = burrow.ink)
+        PillButton(suggestion?.let { "${it.name.substringBefore(' ')}?" } ?: "name them", onClick)
     }
 }
 
@@ -183,22 +185,11 @@ fun AddPersonDialog(onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
     var me by remember { mutableStateOf(false) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Add a person") },
-        text = {
-            Column {
-                OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(me, { me = it })
-                    Text("This is me")
-                }
-                Text("Open their page afterwards to teach Burrow their voice with a short sample.", style = MaterialTheme.typography.bodySmall)
-            }
-        },
-        confirmButton = {
-            TextButton(enabled = name.isNotBlank(), onClick = { scope.launch { People(context).create(name, me); onDismiss() } }) { Text("Add") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
+    HandSheet(onDismiss) {
+        Text("add someone", style = Hand.headline.copy(fontSize = 34.sp), color = burrow.ink)
+        Meta("Usually you name people straight from a talk's notes. Add someone here to teach Burrow their voice first, with a short sample on their page.")
+        HandField(name, { name = it }, placeholder = "their name", singleLine = true)
+        SwitchRow("this is me", me, { me = it })
+        InkButton("add", { scope.launch { People(context).create(name, me); onDismiss() } }, Modifier.fillMaxWidth(), enabled = name.isNotBlank())
+    }
 }

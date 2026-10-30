@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Burrow's mark: a hand-drawn mound with its dark entrance, on a wobbly ground line.
+     Drawn inside the adaptive icon's 66 dp safe circle. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:translateY="-4">
+    <!-- the mound, one loose stroke -->
+    <path
+        android:strokeColor="#1A1A1A"
+        android:strokeWidth="3.4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M30.5,71.6 C33.4,58.2 41.8,45.6 54.6,45.1 C66.8,44.7 75.2,57.4 78.2,71.2" />
+    <!-- the entrance -->
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M45.4,71.8 C45.1,64.2 48.6,58.3 54.3,58.2 C60,58.1 63.5,63.9 63.3,71.8 Z" />
+    <!-- the ground -->
+    <path
+        android:strokeColor="#1A1A1A"
+        android:strokeWidth="3.4"
+        android:strokeLineCap="round"
+        android:pathData="M27.2,72.1 C38.6,71.2 46.8,72.6 55.2,71.9 C64.2,71.2 72.6,72.6 81.2,71.7" />
+    <!-- a tuft of grass on the mound -->
+    <path
+        android:strokeColor="#1A1A1A"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"
+        android:pathData="M66.8,50.6 L68.6,45.6 M69.6,52.6 L72.8,48.6" />
+    </group>
+</vector>

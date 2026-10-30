@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
-
 package com.showcase.desertant.ui.meetings
 
 import android.Manifest
@@ -8,33 +6,17 @@ import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Call
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.outlined.PhoneDisabled
-import androidx.compose.material3.Button
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -52,8 +34,19 @@ import com.showcase.desertant.audio.formatClock
 import com.showcase.desertant.data.MeetingSource
 import com.showcase.desertant.meetings.ExternalRecording
 import com.showcase.desertant.meetings.MeetingImporter
-import com.showcase.desertant.ui.common.EmptyState
 import com.showcase.desertant.ui.common.dateTime
+import com.showcase.desertant.ui.hand.Doodle
+import com.showcase.desertant.ui.hand.DoodleIcon
+import com.showcase.desertant.ui.hand.HandDivider
+import com.showcase.desertant.ui.hand.HandEmpty
+import com.showcase.desertant.ui.hand.HandPage
+import com.showcase.desertant.ui.hand.InkButton
+import com.showcase.desertant.ui.hand.Meta
+import com.showcase.desertant.ui.hand.PageIntro
+import com.showcase.desertant.ui.hand.PillButton
+import com.showcase.desertant.ui.hand.Steps
+import com.showcase.desertant.ui.theme.Hand
+import com.showcase.desertant.ui.theme.burrow
 import kotlinx.coroutines.launch
 
 /** Call recordings and voice memos other apps saved on the phone, ready to bring in. */
@@ -79,47 +72,42 @@ fun DeviceRecordingsScreen(onBack: () -> Unit) {
         reload++
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Calls & recordings") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
-                actions = {
-                    val fresh = items.orEmpty().filter { it.isCall && !it.imported }
-                    if (fresh.isNotEmpty()) TextButton(onClick = { fresh.forEach { import(it) } }) { Text("Import ${fresh.size} calls") }
-                },
-            )
-        },
-    ) { padding ->
+    val fresh = items.orEmpty().filter { it.isCall && !it.imported }
+    HandPage(
+        onBack = onBack,
+        bottom = if (fresh.size > 1) ({ InkButton("bring in all ${fresh.size} new calls", { fresh.forEach { import(it) } }, Modifier.fillMaxWidth()) }) else null,
+    ) {
+        PageIntro("calls & recordings", "Recordings other apps saved on this phone. Bring one in and Burrow writes its notes, like any talk.")
         when {
-            !granted -> EmptyState(
-                Icons.Outlined.Call, "Bring in your call recordings",
-                "Samsung's Phone app can record calls (Phone → Settings → Record calls). Burrow reads those recordings — and your Voice Recorder files — to turn them into notes.",
-                Modifier.padding(padding),
-            ) { Button(onClick = { permission.launch(audioPermission) }) { Text("Allow access to recordings") } }
-            items?.isEmpty() == true -> EmptyState(
-                Icons.Outlined.PhoneDisabled, "No recordings found",
-                "Nothing in Recordings/Call or Recordings/Voice Recorder yet. Turn on call recording in Samsung's Phone app, or use Import a file.",
-                Modifier.padding(padding),
+            !granted -> {
+                Steps(
+                    listOf(
+                        "Turn on call recording in Samsung's Phone app (Phone → ⋮ → Settings → Record calls)",
+                        "Let Burrow see your recordings",
+                        "Tap “bring in” on a call to get its notes",
+                    ),
+                    current = 1,
+                )
+                Spacer(Modifier.height(18.dp))
+                InkButton("let Burrow see recordings", { permission.launch(audioPermission) }, Modifier.fillMaxWidth())
+            }
+            items == null -> Meta("looking for recordings…")
+            items?.isEmpty() == true -> HandEmpty(
+                "no recordings yet.",
+                "Nothing in Recordings/Call or Recordings/Voice Recorder. Turn on call recording in Samsung's Phone app, or import a file from the talks page.",
+                doodle = Doodle.PHONE,
             )
-            else -> LazyColumn(
-                Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(items.orEmpty(), key = { it.uri.toString() }) { r ->
-                    ElevatedCard {
-                        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(if (r.isCall) Icons.Outlined.Call else Icons.Outlined.Mic, null, tint = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(r.name, style = MaterialTheme.typography.titleSmall, maxLines = 1)
-                                Text("${dateTime(context, r.dateMillis)} · ${formatClock(r.durationSec)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            if (r.imported) Icon(Icons.Outlined.CheckCircle, "Imported", tint = MaterialTheme.colorScheme.tertiary)
-                            else FilledTonalButton(onClick = { import(r) }) { Text("Import") }
-                        }
+            else -> items.orEmpty().forEachIndexed { n, r ->
+                if (n > 0) HandDivider(seed = n)
+                Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    DoodleIcon(if (r.isCall) Doodle.PHONE else Doodle.MIC, if (r.isCall) "Call" else "Recording", size = 22.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(r.name, style = Hand.label, color = burrow.ink, maxLines = 1)
+                        Meta("${dateTime(context, r.dateMillis)} · ${formatClock(r.durationSec)}")
                     }
+                    if (r.imported) Meta("brought in ✓")
+                    else PillButton("bring in", { import(r) })
                 }
             }
         }

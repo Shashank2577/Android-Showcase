@@ -62,6 +62,7 @@ import com.showcase.desertant.data.ProfileEntity
 import com.showcase.desertant.data.Utterance
 import com.showcase.desertant.meetings.MeetingWorker
 import com.showcase.desertant.people.People
+import com.showcase.desertant.speech.IndicSpeech
 import com.showcase.desertant.ui.common.dateTime
 import com.showcase.desertant.ui.hand.Body
 import com.showcase.desertant.ui.hand.ConfirmSheet
@@ -71,20 +72,20 @@ import com.showcase.desertant.ui.hand.DoodleIcon
 import com.showcase.desertant.ui.hand.Gutter
 import com.showcase.desertant.ui.hand.HandDivider
 import com.showcase.desertant.ui.hand.HandField
-import com.showcase.desertant.ui.hand.HandLink
 import com.showcase.desertant.ui.hand.HandSheet
 import com.showcase.desertant.ui.hand.InkButton
 import com.showcase.desertant.ui.hand.MarkedText
 import com.showcase.desertant.ui.hand.MaxColumn
 import com.showcase.desertant.ui.hand.Meta
+import com.showcase.desertant.ui.hand.PillButton
 import com.showcase.desertant.ui.hand.SectionHead
-import com.showcase.desertant.ui.hand.handUnderline
 import com.showcase.desertant.ui.hand.marker
+import com.showcase.desertant.ui.settings.IndicLanguages
 import com.showcase.desertant.ui.shell.LocalWideLayout
 import com.showcase.desertant.ui.theme.Hand
 import com.showcase.desertant.ui.theme.burrow
-import kotlinx.coroutines.launch
 import java.io.File
+import kotlinx.coroutines.launch
 
 @Composable
 fun MeetingDetailScreen(id: Long, onBack: () -> Unit, open: (String) -> Unit) {
@@ -118,7 +119,7 @@ fun MeetingDetailContent(id: Long, open: (String) -> Unit, embedded: Boolean, on
             Spacer(Modifier.weight(1f))
             if (m.status == MeetingStatus.READY) DoodleButton(Doodle.SHARE, "Share notes", { sharing = true })
             Box {
-                HandLink("more", { menu = true }, Modifier.padding(horizontal = 8.dp))
+                PillButton("options ▾", { menu = true }, Modifier.padding(horizontal = 8.dp))
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; renaming = true })
                     DropdownMenuItem(text = { Text("Write the notes again") }, onClick = { menu = false; retry() })
@@ -160,7 +161,18 @@ private fun ProcessingState(m: MeetingEntity, onRetry: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Text(m.title, style = Hand.headline, color = burrow.ink)
-        if (m.status == MeetingStatus.FAILED) {
+        val indic = IndicSpeech.languageFor(m.language)
+        val context = LocalContext.current
+        val languages by IndicSpeech.state.collectAsState()
+        if (m.status == MeetingStatus.FAILED && indic != null) {
+            // A talk in a language Voz doesn't speak: one download away from its notes.
+            val ready = languages[indic.code] == IndicSpeech.State.Ready || IndicSpeech.isReady(context, indic.code)
+            Body(
+                if (ready) "${indic.name} is on the phone now. Write the notes." else "This talk is in ${indic.name} (${indic.native}). Burrow needs the ${indic.name} speech model once to write its notes.",
+                color = burrow.ink,
+            )
+            if (ready) InkButton("write the notes", onRetry, Modifier.fillMaxWidth()) else IndicLanguages()
+        } else if (m.status == MeetingStatus.FAILED) {
             DoodleIcon(Doodle.CROSS, null, size = 40.dp, color = burrow.redPen, stroke = 3.dp)
             Body(m.error ?: "The notes couldn't be written.", color = burrow.redPen)
             InkButton("try again", onRetry)
@@ -197,7 +209,8 @@ private fun Notes(
     val overview: LazyListScope.() -> Unit = {
         item {
             Row(verticalAlignment = Alignment.Top) {
-                Text(m.title, Modifier.weight(1f).clickable(onClick = onRename), style = Hand.headline, color = burrow.ink)
+                Text(m.title, Modifier.weight(1f), style = Hand.headline, color = burrow.ink)
+                DoodleButton(Doodle.PEN, "Rename", onRename, size = 22.dp)
             }
             Meta(
                 listOfNotNull(dateTime(context, m.createdAt), formatClock(m.durationSec), m.language?.let { languageName(it) }).joinToString(" · "),
@@ -215,6 +228,7 @@ private fun Notes(
         }
         if (speakers.isNotEmpty()) item { Lanes(utterances, speakers, profiles, m.durationSec, player) }
         item { WhoWasThere(speakers, profiles, onAssign, open) }
+        if (speakers.any { it.profileId == null }) item { Meta("Name a voice once and Burrow suggests that person in later talks.") }
         if (highlights.isNotEmpty()) item {
             SectionHead("worth remembering")
             highlights.forEach { mo -> MomentLine(mo, player) }
@@ -373,7 +387,7 @@ private fun WhoWasThere(speakers: List<MeetingSpeakerEntity>, profiles: List<Pro
                     DoodleButton(Doodle.TICK, "Yes, it's ${suggestion.name}", { scope.launch { people.assign(s.id, suggestion.id) } }, size = 20.dp)
                     DoodleButton(Doodle.CROSS, "No", { scope.launch { people.dismissSuggestion(s.id) } }, size = 18.dp, color = burrow.redPen)
                 }
-                look.profile == null -> Text("who is this?", Modifier.handUnderline(burrow.ink), style = Hand.small, color = burrow.ink)
+                look.profile == null -> PillButton("name them", { onAssign(s) })
                 else -> DoodleIcon(Doodle.ARROW, null, size = 20.dp, color = burrow.pencil)
             }
         }

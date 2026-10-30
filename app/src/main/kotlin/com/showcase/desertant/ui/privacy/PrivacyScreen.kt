@@ -115,10 +115,13 @@ fun PrivacyScreen(onBack: () -> Unit, openModels: () -> Unit, onWiped: () -> Uni
             }
         }, body = "the notes and transcript stay")
         SwitchRow("learn voices when I name someone", learnVoices, p::setLearnVoices, body = "so Burrow can suggest them in later talks")
-        SwitchRow("hide from screenshots & recents", secure, p::setSecureScreens, body = "blocks screen capture of Burrow")
+        SwitchRow(
+            "hide every screen from screenshots", secure, p::setSecureScreens,
+            body = "The vault, private photos and masked text are always hidden from screenshots and recent apps; this hides the rest too.",
+        )
 
         Spacer(Modifier.height(16.dp))
-        Door("the models", openModels, meta = "what's on the phone, sizes, the model lab")
+        Door("the models & languages", openModels, meta = "what's on the phone, Hindi speech, the model lab")
         Spacer(Modifier.height(24.dp))
         HandLink("wipe everything", { wipe = true }, Modifier.align(Alignment.CenterHorizontally), color = burrow.redPen)
         Meta("Photos stay in your gallery; Burrow forgets all it learned.", Modifier.align(Alignment.CenterHorizontally))

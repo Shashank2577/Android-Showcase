@@ -348,14 +348,17 @@ fun Door(
         }
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.Top) {
-                MarkedText(text, Modifier.weight(1f, fill = false), mark = mark, style = style)
+                // A door with nowhere to go is drawn in pencil, so only live ones read as tappable.
+                MarkedText(text, Modifier.weight(1f, fill = false), mark = mark, style = style, color = if (onClick != null) burrow.ink else burrow.pencil)
                 if (alert) DoodleIcon(Doodle.EXCLAIM, "needs you", Modifier.padding(start = 2.dp, top = 4.dp), size = 22.dp, color = burrow.redPen, stroke = 2.6.dp)
             }
             if (meta != null) Meta(meta, Modifier.padding(top = 2.dp))
         }
         if (onClick != null) {
             Spacer(Modifier.width(12.dp))
-            DoodleIcon(Doodle.ARROW, null, size = 28.dp)
+            Box(Modifier.size(40.dp).border(1.6.dp, burrow.ink, CircleShape), contentAlignment = Alignment.Center) {
+                DoodleIcon(Doodle.ARROW, null, size = 22.dp)
+            }
         }
     }
 }
@@ -619,3 +622,106 @@ fun OnDeviceStamp(modifier: Modifier = Modifier, text: String = "on this phone")
     }
 }
 
+
+/** A secondary action that still looks like a button: an outlined pill. */
+@Composable
+fun PillButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, leading: Doodle? = null, enabled: Boolean = true, color: Color = burrow.ink) {
+    Row(
+        modifier
+            .heightIn(min = 44.dp)
+            .alpha(if (enabled) 1f else 0.4f)
+            .clip(CircleShape)
+            .border(1.6.dp, color, CircleShape)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        if (leading != null) {
+            DoodleIcon(leading, null, size = 18.dp, color = color)
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(text, style = Hand.label, color = color, maxLines = 1, softWrap = false)
+    }
+}
+
+/**
+ * The top of a page: what it is, and in one plain line what you can do here.
+ * Every screen starts with one, so nobody has to guess.
+ */
+@Composable
+fun PageIntro(title: String, purpose: String, modifier: Modifier = Modifier, mark: String? = null) {
+    Column(modifier.fillMaxWidth().padding(bottom = 18.dp)) {
+        MarkedText(title, mark = mark, style = Hand.headline)
+        Spacer(Modifier.height(4.dp))
+        Body(purpose, color = burrow.pencil)
+    }
+}
+
+/** Numbered steps, so a flow says up front what will happen and in what order. */
+@Composable
+fun Steps(steps: List<String>, modifier: Modifier = Modifier, current: Int = -1) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        steps.forEachIndexed { i, step ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val on = i == current
+                Box(
+                    Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .then(if (on) Modifier.background(burrow.ink) else Modifier.border(1.4.dp, burrow.ink, CircleShape)),
+                    contentAlignment = Alignment.Center,
+                ) { Text("${i + 1}", style = Hand.small.copy(fontSize = 15.sp), color = if (on) burrow.paper else burrow.ink) }
+                Spacer(Modifier.width(10.dp))
+                Text(step, style = TextStyle(fontFamily = Inter, fontSize = 14.sp, lineHeight = 19.sp), color = if (current < 0 || on) burrow.ink else burrow.pencil)
+            }
+        }
+    }
+}
+
+/** A numbered section head for step-by-step pages ("1  paste it"). */
+@Composable
+fun StepHead(number: Int, text: String, modifier: Modifier = Modifier, done: Boolean = false) {
+    Row(modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier.size(30.dp).clip(CircleShape).background(if (done) burrow.ink else burrow.paper).border(1.6.dp, burrow.ink, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (done) DoodleIcon(Doodle.TICK, null, size = 18.dp, color = burrow.paper, stroke = 2.4.dp)
+            else Text("$number", style = Hand.label, color = burrow.ink)
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(text, style = Hand.title.copy(fontSize = 26.sp), color = burrow.ink)
+    }
+}
+
+/**
+ * The state of a photo you can pick, drawn on the photo itself: a filled tick
+ * when it's chosen, an empty ring when it isn't. The label underneath says what
+ * the choice means ("let go", "keep", "to the vault").
+ */
+@Composable
+fun PickMark(picked: Boolean, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .size(28.dp)
+            .clip(CircleShape)
+            .background(if (picked) burrow.ink else burrow.paper.copy(alpha = 0.85f))
+            .border(1.8.dp, if (picked) burrow.paper else burrow.ink, CircleShape),
+        contentAlignment = Alignment.Center,
+    ) { if (picked) DoodleIcon(Doodle.TICK, null, size = 18.dp, color = burrow.paper, stroke = 2.6.dp) }
+}
+
+/** A quiet confirmation strip after something happened, with what to do next. */
+@Composable
+fun DoneNote(text: String, modifier: Modifier = Modifier, action: String? = null, onAction: (() -> Unit)? = null) {
+    Row(
+        modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(burrow.smudge).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        DoodleIcon(Doodle.TICK, null, size = 20.dp)
+        Spacer(Modifier.width(10.dp))
+        Text(text, Modifier.weight(1f), style = Hand.label, color = burrow.ink)
+        if (action != null && onAction != null) HandLink(action, onAction, style = Hand.small)
+    }
+}

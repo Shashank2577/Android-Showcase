@@ -14,6 +14,7 @@ import com.showcase.desertant.privacy.Ledger
 import com.showcase.desertant.privacy.MaskSession
 import com.showcase.desertant.privacy.PrivacySettings
 import com.showcase.desertant.privacy.Vault
+import com.showcase.desertant.speech.IndicSpeech
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -80,6 +81,7 @@ class ShowcaseApp : Application() {
             }
         })
         scope.launch { Housekeeping.deleteOldAudio(this@ShowcaseApp) }
+        IndicSpeech.refresh(this)
     }
 
     private companion object {

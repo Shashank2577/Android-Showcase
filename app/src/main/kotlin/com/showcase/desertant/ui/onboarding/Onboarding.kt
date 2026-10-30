@@ -1,8 +1,11 @@
 package com.showcase.desertant.ui.onboarding
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -42,8 +45,12 @@ import com.showcase.desertant.ui.hand.HandSheet
 import com.showcase.desertant.ui.hand.InkButton
 import com.showcase.desertant.ui.hand.MarkedText
 import com.showcase.desertant.ui.hand.Meta
+import com.showcase.desertant.ui.hand.PageIntro
+import com.showcase.desertant.ui.hand.PillButton
+import com.showcase.desertant.ui.hand.SectionHead
 import com.showcase.desertant.ui.hand.SwitchRow
 import com.showcase.desertant.ui.photos.photoPermissions
+import com.showcase.desertant.ui.settings.IndicLanguages
 import com.showcase.desertant.ui.theme.Hand
 import com.showcase.desertant.ui.theme.burrow
 
@@ -119,14 +126,22 @@ fun AskFirstScreen(onBack: () -> Unit, onDone: () -> Unit) {
     val app = context.app
     val status by app.hub.status.collectAsState()
     fun granted(p: String) = ContextCompat.checkSelfPermission(context, p) == PackageManager.PERMISSION_GRANTED
-    var photos by remember { mutableStateOf(granted(photoPermissions().first())) }
+    var photos by remember { mutableStateOf(photoPermissions().any { granted(it) }) }
     var mic by remember { mutableStateOf(granted(Manifest.permission.RECORD_AUDIO)) }
     var notify by remember { mutableStateOf(Build.VERSION.SDK_INT < 33 || granted(Manifest.permission.POST_NOTIFICATIONS)) }
     var offlineAfter by rememberSaveable { mutableStateOf(true) }
+    // After Android stops showing its dialog, the only way left is the app's settings page.
+    var refused by remember { mutableStateOf(setOf<String>()) }
 
-    val askPhotos = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { photos = granted(photoPermissions().first()) || it.values.any { v -> v } }
-    val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { mic = it }
-    val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { notify = it }
+    val askPhotos = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        photos = photoPermissions().any { p -> granted(p) }
+        if (!photos) refused = refused + "photos"
+    }
+    val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { mic = it; if (!it) refused = refused + "mic" }
+    val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { notify = it; if (!it) refused = refused + "notify" }
+    fun openSettings() = runCatching {
+        context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)))
+    }
 
     LaunchedEffect(Unit) { app.hub.refreshAll() }
     val ready = SETUP_MODELS.count { status[it] == ModelStatus.Ready }
@@ -137,7 +152,7 @@ fun AskFirstScreen(onBack: () -> Unit, onDone: () -> Unit) {
         onBack = onBack,
         bottom = {
             InkButton(
-                "start",
+                if (ready == SETUP_MODELS.size) "start" else "start — download later",
                 {
                     // "Never go online" only once the models are here, or the jobs would have nothing to run.
                     if (offlineAfter && ready == SETUP_MODELS.size) app.privacy.setNeverOnline(true)
@@ -149,46 +164,65 @@ fun AskFirstScreen(onBack: () -> Unit, onDone: () -> Unit) {
             )
         },
     ) {
-        Spacer(Modifier.height(8.dp))
-        MarkedText("you decide what Burrow sees.", mark = "you decide", style = Hand.headline.copy(fontSize = 44.sp, lineHeight = 46.sp))
-        Spacer(Modifier.height(8.dp))
-        Meta("Each switch asks Android for one thing. You can change any of them later.")
-        Spacer(Modifier.height(20.dp))
-        SwitchRow("your photos", photos, { if (it) askPhotos.launch(photoPermissions()) }, body = "to tidy them and keep private ones safe", doodle = Doodle.EYE)
-        SwitchRow("the microphone", mic, { if (it) askMic.launch(Manifest.permission.RECORD_AUDIO) }, body = "only while you press record", doodle = Doodle.MIC)
-        SwitchRow(
-            "a quiet notification", notify,
-            { if (it && Build.VERSION.SDK_INT >= 33) askNotify.launch(Manifest.permission.POST_NOTIFICATIONS) },
-            body = "when a scan or a talk's notes are done", doodle = Doodle.SPARK,
+        PageIntro(
+            "you decide what Burrow sees.",
+            "Allow only what you want to use. Each one asks Android once; you can change it later in Android's settings.",
+            mark = "you decide",
         )
+        Permission("your photos", "to tidy them and keep private ones safe", Doodle.EYE, photos, "photos" in refused, { askPhotos.launch(photoPermissions()) }, ::openSettings)
+        Permission("the microphone", "only while you press record", Doodle.MIC, mic, "mic" in refused, { askMic.launch(Manifest.permission.RECORD_AUDIO) }, ::openSettings)
+        if (Build.VERSION.SDK_INT >= 33) {
+            Permission("a quiet notification", "when a look-through or a talk's notes are done", Doodle.SPARK, notify, "notify" in refused, { askNotify.launch(Manifest.permission.POST_NOTIFICATIONS) }, ::openSettings)
+        }
         Spacer(Modifier.height(18.dp))
         HandDivider()
         Spacer(Modifier.height(14.dp))
-        Text("one-time setup", style = Hand.title, color = burrow.ink)
-        Body(
-            "Download the models (about $SETUP_MB MB — Wi-Fi is best). Then Burrow can work with no internet at all.",
-            color = burrow.pencil,
-        )
+        SectionHead("one-time setup", note = "about $SETUP_MB MB")
+        Body("Download the models once — Wi-Fi is best. After that Burrow works with no internet at all.", color = burrow.pencil)
         Spacer(Modifier.height(12.dp))
         HandProgress(if (ready == 0 && !downloading) null else ready / SETUP_MODELS.size.toFloat())
         Spacer(Modifier.height(6.dp))
         Meta(
             SETUP_MODELS.joinToString("  ·  ") { k ->
-                val s = status[k]
+                val st = status[k]
                 k.title.lowercase() + when {
-                    s == ModelStatus.Ready -> " ✓"
-                    s == ModelStatus.Downloading -> " …"
-                    s is ModelStatus.Failed -> " ✗"
+                    st == ModelStatus.Ready -> " ✓"
+                    st == ModelStatus.Downloading -> " …"
+                    st is ModelStatus.Failed -> " ✗"
                     else -> ""
                 }
             },
         )
         failed?.let { Meta("${it.title} didn't download: ${(status[it] as ModelStatus.Failed).message}", color = burrow.redPen) }
-        Spacer(Modifier.height(6.dp))
-        if (ready < SETUP_MODELS.size && !downloading) {
-            HandLink(if (ready == 0) "download now" else "download the rest", { app.hub.downloadInBackground(*SETUP_MODELS.toTypedArray()) })
-        }
         Spacer(Modifier.height(8.dp))
-        SwitchRow("then never go online", offlineAfter, { offlineAfter = it }, body = "Burrow cuts its own network once the models are here")
+        when {
+            ready == SETUP_MODELS.size -> Meta("All here. ✓")
+            downloading -> Meta("Downloading — you can start using Burrow meanwhile.")
+            else -> PillButton(if (ready == 0) "download the models" else "download the rest", { app.hub.downloadInBackground(*SETUP_MODELS.toTypedArray()) }, leading = Doodle.PLUS)
+        }
+        Spacer(Modifier.height(18.dp))
+        SectionHead("talks in Hindi?", note = "optional")
+        IndicLanguages()
+        Spacer(Modifier.height(8.dp))
+        SwitchRow("then never go online", offlineAfter, { offlineAfter = it }, body = "Once the models are here, Burrow cuts its own network for good. You can undo this on the privacy page.")
+    }
+}
+
+/** One permission: what it's for, and either "allowed ✓" or a button that asks (or opens settings if Android won't ask again). */
+@Composable
+private fun Permission(title: String, why: String, doodle: Doodle, allowed: Boolean, refused: Boolean, ask: () -> Unit, settings: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        DoodleIcon(doodle, null, size = 26.dp)
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = Hand.door.copy(fontSize = 24.sp), color = burrow.ink)
+            Meta(why)
+        }
+        Spacer(Modifier.width(10.dp))
+        when {
+            allowed -> Text("allowed ✓", style = Hand.small, color = burrow.ink)
+            refused -> PillButton("settings", settings)
+            else -> PillButton("allow", ask)
+        }
     }
 }

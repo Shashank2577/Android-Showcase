@@ -19,6 +19,7 @@ import com.showcase.desertant.data.VoiceSignature
 import com.showcase.desertant.people.ProfileMatcher
 import com.showcase.desertant.people.VoiceSignatures
 import com.showcase.desertant.privacy.LedgerEntry
+import com.showcase.desertant.speech.IndicSpeech
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -47,13 +48,13 @@ class MeetingProcessor(private val context: Context) {
         val rate = RATE.toDouble()
         hub.ensureReady(ModelKind.EAR)
         step("Getting the speech models ready (the first time downloads them)…")
-        hub.ensureReady(ModelKind.VOZ)
         hub.ensureReady(ModelKind.WHO)
 
         // Work through the recording ~10 minutes at a time, cut at pauses, so memory
         // stays the same for a 5-minute call and a 2-hour meeting. Speakers found in
         // each window are linked to the same person across windows by voice.
         var language: ai.desertant.ear.Detection? = null
+        var indic: IndicSpeech.Language? = null
         val words = ArrayList<Word>()
         val text = StringBuilder()
         val turns = ArrayList<Turn>()
@@ -76,12 +77,31 @@ class MeetingProcessor(private val context: Context) {
                 step("Detecting the language…")
                 // Ear looks at up to three 30 s windows of the start.
                 language = hub.ear.identify(piece.copyOfRange(0, minOf(piece.size, RATE * 240)), rate)
+                indic = IndicSpeech.languageFor(language.language)?.takeIf { language.language !in VOZ_LANGUAGES }
+                indic?.let { lang ->
+                    if (!IndicSpeech.isReady(context, lang.code)) {
+                        db.meetings().get(meetingId)?.let { db.meetings().update(it.copy(language = lang.code, languageSupported = false)) }
+                        throw IllegalStateException(
+                            "This talk is in ${lang.name}. Download ${lang.name} (about ${lang.sizeMb} MB, once) and Burrow can write its notes.",
+                        )
+                    }
+                }
             }
 
             step("Transcribing$label…")
-            val part = hub.voz.transcribe(piece, rate)
-            part.words.forEach { words += Word(it.text, it.start + start, it.end + start) }
-            if (part.text.isNotBlank()) text.append(part.text.trim()).append(' ')
+            val lang = indic
+            if (lang != null) {
+                // Voz doesn't speak this language: AI4Bharat's IndicConformer does, on the phone.
+                val said = IndicSpeech.transcribe(context, lang.code, piece)
+                said.forEach { words += Word(it.text, it.start + start, it.end + start) }
+                if (said.isNotEmpty()) text.append(said.joinToString(" ") { it.text }).append(' ')
+            } else {
+                // Only now: a Hindi talk never needs Voz on the phone.
+                hub.ensureReady(ModelKind.VOZ)
+                val part = hub.voz.transcribe(piece, rate)
+                part.words.forEach { words += Word(it.text, it.start + start, it.end + start) }
+                if (part.text.isNotBlank()) text.append(part.text.trim()).append(' ')
+            }
 
             step("Working out who spoke when$label…")
             val local = hub.who.diarize(piece, rate)
@@ -91,8 +111,11 @@ class MeetingProcessor(private val context: Context) {
             start += piece.size.toDouble() / RATE
             if (last) break
         }
-        val lang = language?.language
-        val supported = lang == null || lang in VOZ_LANGUAGES
+        IndicSpeech.closeRecognizer()
+        val lang = indic?.code ?: language?.language
+        val supported = lang == null || lang in VOZ_LANGUAGES || indic != null
+        // Topics and follow-ups are tuned for the languages Voz covers; skip them rather than guess.
+        val european = indic == null
         val transcript = Transcription(text.toString().trim(), words, start)
         val durationSec = start
         val speakerCount = voices.size
@@ -103,7 +126,7 @@ class MeetingProcessor(private val context: Context) {
         hub.ensureReady(ModelKind.GIST)
         val gist = hub.gist
         val fullText = transcript.text
-        val topics = if (fullText.split(' ').size >= 15) {
+        val topics = if (european && fullText.split(' ').size >= 15) {
             gist.classify(fullText.take(GIST_CHARS), topK = 4).map { TopicScore(it.slug, it.name, it.score) }
         } else emptyList()
         val topicSlugs = topics.map { it.slug }
@@ -111,7 +134,7 @@ class MeetingProcessor(private val context: Context) {
             val scores = gist.scores(text)
             topicSlugs.maxOf { scores[it] ?: 0.0 }
         }
-        val followUps = followUps(sentences)
+        val followUps = if (european) followUps(sentences) else emptyList()
 
         step("Recognizing voices…")
         val speakerIndices = (0 until speakerCount).filter { s -> turns.any { it.speaker == s } }
@@ -123,7 +146,7 @@ class MeetingProcessor(private val context: Context) {
         val speakers = speakerIndices.map { s ->
             val said = utterances.filter { it.speaker == s }
             val text = said.joinToString(" ") { it.text }
-            val speakerTopics = if (text.split(' ').size >= 25) {
+            val speakerTopics = if (european && text.split(' ').size >= 25) {
                 gist.classify(text.take(GIST_CHARS), topK = 3).map { TopicScore(it.slug, it.name, it.score) }
             } else emptyList()
             val signature = signatures[s]
@@ -144,7 +167,7 @@ class MeetingProcessor(private val context: Context) {
             )
         }
 
-        val title = if (meeting.titleEdited) meeting.title else autoTitle(topics, meeting.createdAt)
+        val title = if (meeting.titleEdited) meeting.title else autoTitle(topics, meeting.createdAt, indic?.name)
         db.speakers().deleteForMeeting(meetingId)
         db.speakers().insert(speakers)
         db.meetings().update(
@@ -218,10 +241,10 @@ class MeetingProcessor(private val context: Context) {
     private fun quoteOf(said: List<Utterance>): String? =
         sentences(said).map { it.text }.filter { it.split(' ').size in 6..30 }.maxByOrNull { it.length }
 
-    private fun autoTitle(topics: List<TopicScore>, createdAt: Long): String {
+    private fun autoTitle(topics: List<TopicScore>, createdAt: Long, language: String? = null): String {
         val day = SimpleDateFormat("EEE d MMM, HH:mm", Locale.getDefault()).format(Date(createdAt))
         val topic = topics.firstOrNull()?.name
-        return if (topic != null) "$topic · $day" else "Conversation · $day"
+        return if (topic != null) "$topic · $day" else "${language?.let { "$it talk" } ?: "Conversation"} · $day"
     }
 
     companion object {

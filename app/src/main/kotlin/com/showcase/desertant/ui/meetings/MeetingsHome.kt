@@ -45,6 +45,7 @@ import com.showcase.desertant.data.ProfileEntity
 import com.showcase.desertant.meetings.MeetingImporter
 import com.showcase.desertant.meetings.RecorderService
 import com.showcase.desertant.meetings.RecorderState
+import com.showcase.desertant.speech.IndicSpeech
 import com.showcase.desertant.ui.common.dateTime
 import com.showcase.desertant.ui.hand.Doodle
 import com.showcase.desertant.ui.hand.DoodleButton
@@ -52,10 +53,11 @@ import com.showcase.desertant.ui.hand.DoodleIcon
 import com.showcase.desertant.ui.hand.HandDivider
 import com.showcase.desertant.ui.hand.HandEmpty
 import com.showcase.desertant.ui.hand.HandField
-import com.showcase.desertant.ui.hand.HandLink
 import com.showcase.desertant.ui.hand.HandPage
 import com.showcase.desertant.ui.hand.MarkedText
 import com.showcase.desertant.ui.hand.Meta
+import com.showcase.desertant.ui.hand.PageIntro
+import com.showcase.desertant.ui.hand.PillButton
 import com.showcase.desertant.ui.shell.LocalWideLayout
 import com.showcase.desertant.ui.theme.Hand
 import com.showcase.desertant.ui.theme.burrow
@@ -89,20 +91,24 @@ fun MeetingsHome(open: (String) -> Unit) {
 
     val list = @Composable {
         HandPage(topEnd = { DoodleButton(Doodle.LOCK, "Privacy", { open("privacy") }) }) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("talks", style = Hand.headline, color = burrow.ink)
-                    Meta("transcribed, sorted and remembered on this phone")
-                }
+            Row(verticalAlignment = Alignment.Top) {
+                PageIntro(
+                    "talks",
+                    "Record a meeting, a lecture or a call. Burrow writes the notes — who said what, the topics, the to-dos — on this phone.",
+                    Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(12.dp))
                 RecordButton(recorder as? RecorderState.Recording) { open("record") }
             }
-            Spacer(Modifier.height(18.dp))
-            HandField(query, { query = it }, placeholder = "search every conversation…", singleLine = true, leading = Doodle.SEARCH)
-            Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                HandLink("bring in a call recording", { open("recordings") })
-                HandLink("a file", { picker.launch(arrayOf("audio/*", "video/*")) })
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PillButton("import a call", { open("recordings") }, leading = Doodle.PHONE)
+                PillButton("import a file", { picker.launch(arrayOf("audio/*", "video/*")) }, leading = Doodle.PLUS)
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
+            if (meetings.orEmpty().isNotEmpty() || query.isNotBlank()) {
+                HandField(query, { query = it }, placeholder = "search everything that was said…", singleLine = true, leading = Doodle.SEARCH)
+                Spacer(Modifier.height(8.dp))
+            }
             val m = meetings
             if (m != null && m.isEmpty()) {
                 if (query.isBlank()) HandEmpty(
@@ -175,6 +181,7 @@ private fun TalkRow(meeting: MeetingEntity, people: List<ProfileEntity>, highlig
                 Spacer(Modifier.width(6.dp))
             }
             Text(meeting.title, style = Hand.door, color = burrow.ink, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            DoodleIcon(Doodle.ARROW, "Open", size = 22.dp, color = burrow.pencil)
         }
         Meta(
             buildString {
@@ -195,7 +202,9 @@ private fun TalkRow(meeting: MeetingEntity, people: List<ProfileEntity>, highlig
                     snippet(meeting.transcriptText, highlight)?.let { Meta("…$it…", Modifier.padding(top = 4.dp), color = burrow.ink, maxLines = 2) }
                 }
             }
-            MeetingStatus.FAILED -> Meta("couldn't finish — open to try again", Modifier.padding(top = 4.dp), color = burrow.redPen)
+            MeetingStatus.FAILED -> IndicSpeech.languageFor(meeting.language)?.let { lang ->
+                Meta("in ${lang.name} — open it to get ${lang.name} and write its notes", Modifier.padding(top = 4.dp), color = burrow.ink)
+            } ?: Meta("couldn't finish — open it to try again", Modifier.padding(top = 4.dp), color = burrow.redPen)
             else -> Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 1.5.dp, color = burrow.ink)
                 Spacer(Modifier.width(8.dp))
