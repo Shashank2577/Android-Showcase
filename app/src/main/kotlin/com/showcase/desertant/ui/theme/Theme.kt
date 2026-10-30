@@ -14,7 +14,9 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -52,16 +54,22 @@ private val Light = BurrowColors(
     redPen = Color(0xFFDC2626),
 )
 
+/**
+ * Dark is a night notebook, not white-on-black: a warm charcoal page and chalky
+ * ink at about 12:1, so thin hand strokes don't bloom, wells and rules that are
+ * actually visible, and a marker toned down so a highlight glows instead of
+ * shouting. Every pair here meets WCAG AA; pencil and graphite clear 4.5:1.
+ */
 private val Dark = BurrowColors(
-    paper = Color(0xFF141414),
-    ink = Color(0xFFF2F0EA),
-    pencil = Color(0xFFA8A6A0),
-    graphite = Color(0xFF6E6C67),
-    rule = Color(0x26F2F0EA),
-    smudge = Color(0xFF1F1F1E),
-    marker = Color(0xFFFFE45C),
-    markerInk = Color(0xFF1A1A1A),
-    redPen = Color(0xFFF87171),
+    paper = Color(0xFF1E1D1B),
+    ink = Color(0xFFE8E3D8),
+    pencil = Color(0xFFB9B3A8),
+    graphite = Color(0xFF948E84),
+    rule = Color(0x4DE8E3D8),
+    smudge = Color(0xFF2D2B28),
+    marker = Color(0xFFD9BF45),
+    markerInk = Color(0xFF1E1D1B),
+    redPen = Color(0xFFFF8A80),
 )
 
 val LocalBurrowColors = staticCompositionLocalOf { Light }
@@ -81,6 +89,51 @@ val Inter = FontFamily(
     Font(R.font.inter_semibold, FontWeight.SemiBold),
 )
 
+@OptIn(ExperimentalTextApi::class)
+private fun shantell(informality: Float) = FontFamily(
+    listOf(400, 500, 600).map { w ->
+        Font(
+            R.font.shantell_variable, FontWeight(w),
+            variationSettings = FontVariation.Settings(FontVariation.weight(w), FontVariation.Setting("INFM", informality)),
+        )
+    },
+)
+
+/**
+ * How handwritten the quiet text is, from formal to fully handwritten.
+ * Headlines are always Caveat; this picks the font under them, so the two
+ * can sit close together instead of jumping from a notebook to a manual.
+ */
+enum class Voice(val label: String, val note: String, val family: FontFamily, val scale: Float) {
+    FORMAL("formal", "Inter, a crisp sans", Inter, 1f),
+    FRIENDLY("friendly", "Nunito, a rounded sans", FontFamily(Font(R.font.nunito_regular, FontWeight.Normal), Font(R.font.nunito_semibold, FontWeight.SemiBold)), 1.02f),
+    NEAT("neat hand", "Shantell Sans, marker-neat", shantell(0f), 0.98f),
+    LOOSE("loose hand", "Shantell Sans, informal", shantell(100f), 0.98f),
+    HANDWRITTEN("all handwritten", "Patrick Hand", FontFamily(Font(R.font.patrickhand_regular, FontWeight.Normal)), 1.14f),
+    ;
+
+    companion object {
+        val DEFAULT = NEAT
+    }
+}
+
+/** Light, dark, or whatever the phone is set to. */
+enum class ThemeMode(val label: String) { SYSTEM("like the phone"), LIGHT("light"), DARK("dark") }
+
+data class BodyType(val family: FontFamily, val scale: Float)
+
+val LocalBodyType = staticCompositionLocalOf { BodyType(Inter, 1f) }
+
+/** The font for quiet text under the hand-lettering, per the chosen [Voice]. */
+val bodyFont: FontFamily @Composable get() = LocalBodyType.current.family
+
+/** A body text style in the chosen voice, at [size] sp scaled for that font's size on the page. */
+@Composable
+fun bodyStyle(size: Float, lineHeight: Float, weight: FontWeight = FontWeight.Normal): TextStyle {
+    val t = LocalBodyType.current
+    return TextStyle(fontFamily = t.family, fontWeight = weight, fontSize = (size * t.scale).sp, lineHeight = (lineHeight * t.scale).sp)
+}
+
 /** Hand-lettered styles that have no Material role. */
 object Hand {
     val display = TextStyle(fontFamily = Caveat, fontWeight = FontWeight.Bold, fontSize = 52.sp, lineHeight = 54.sp, letterSpacing = (-0.01).em)
@@ -91,7 +144,7 @@ object Hand {
     val small = TextStyle(fontFamily = Caveat, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, lineHeight = 21.sp)
 }
 
-private val BurrowTypography = Typography(
+private fun typography(body: BodyType) = Typography(
     displayLarge = Hand.display.copy(fontSize = 64.sp, lineHeight = 64.sp),
     displayMedium = Hand.display,
     displaySmall = Hand.headline,
@@ -101,12 +154,12 @@ private val BurrowTypography = Typography(
     titleLarge = Hand.title,
     titleMedium = Hand.door.copy(fontSize = 24.sp, lineHeight = 27.sp),
     titleSmall = Hand.label,
-    bodyLarge = TextStyle(fontFamily = Inter, fontSize = 16.sp, lineHeight = 23.sp),
-    bodyMedium = TextStyle(fontFamily = Inter, fontSize = 15.sp, lineHeight = 21.sp),
-    bodySmall = TextStyle(fontFamily = Inter, fontSize = 13.sp, lineHeight = 18.sp),
+    bodyLarge = TextStyle(fontFamily = body.family, fontSize = (16 * body.scale).sp, lineHeight = (23 * body.scale).sp),
+    bodyMedium = TextStyle(fontFamily = body.family, fontSize = (15 * body.scale).sp, lineHeight = (21 * body.scale).sp),
+    bodySmall = TextStyle(fontFamily = body.family, fontSize = (13 * body.scale).sp, lineHeight = (18 * body.scale).sp),
     labelLarge = Hand.label.copy(fontSize = 20.sp),
-    labelMedium = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 16.sp),
-    labelSmall = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 14.sp),
+    labelMedium = TextStyle(fontFamily = body.family, fontWeight = FontWeight.Medium, fontSize = (12 * body.scale).sp, lineHeight = (16 * body.scale).sp),
+    labelSmall = TextStyle(fontFamily = body.family, fontWeight = FontWeight.Medium, fontSize = (11 * body.scale).sp, lineHeight = (14 * body.scale).sp),
 )
 
 private val BurrowShapes = Shapes(
@@ -155,12 +208,25 @@ private fun scheme(c: BurrowColors, dark: Boolean) = (if (dark) darkColorScheme(
 )
 
 @Composable
-fun BurrowTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+fun BurrowTheme(
+    mode: ThemeMode = ThemeMode.SYSTEM,
+    voice: Voice = Voice.DEFAULT,
+    content: @Composable () -> Unit,
+) {
+    val dark = when (mode) {
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+    }
     val colors = if (dark) Dark else Light
-    CompositionLocalProvider(LocalBurrowColors provides colors) {
-        MaterialTheme(colorScheme = scheme(colors, dark), typography = BurrowTypography, shapes = BurrowShapes, content = content)
+    val body = BodyType(voice.family, voice.scale)
+    CompositionLocalProvider(LocalBurrowColors provides colors, LocalBodyType provides body) {
+        MaterialTheme(colorScheme = scheme(colors, dark), typography = typography(body), shapes = BurrowShapes, content = content)
     }
 }
+
+/** Whether the theme in effect is the dark one (for system bars and previews). */
+val isBurrowDark: Boolean @Composable get() = LocalBurrowColors.current.paper == Dark.paper
 
 /**
  * Speakers and labels are told apart by ink texture, not by color; where a hue

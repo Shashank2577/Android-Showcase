@@ -34,6 +34,24 @@ These came out of the first round of use, when people said they were lost on som
 5. **After something happens, say so and offer the next step.** `DoneNote` reports the result inline ("Let go of 12 photos… back to photos"). Failures explain what to do, such as "download Hindi" or "set a screen lock".
 6. **Permissions show their state.** Each one shows either "allowed ✓" or an "allow" button, and a "settings" button once Android won't ask again. A switch is never used for something that can't be switched back off.
 
+## Handwriting level and light/dark (3.3)
+
+Headlines are always Caveat. The quieter text under them is a **voice** the user picks in *Settings → handwriting*. There are five stops from formal to handwritten, so the pairing never has to jump from a notebook to a manual:
+
+| Voice | Font | Feel |
+| --- | --- | --- |
+| formal | Inter | crisp UI sans (3.0–3.2) |
+| friendly | Nunito | rounded sans |
+| **neat hand** (default) | Shantell Sans, informality 0 | marker-neat; bridges Caveat and a sans |
+| loose hand | Shantell Sans, informality 100 | bouncier, more personal |
+| all handwritten | Patrick Hand | a notebook throughout |
+
+Shantell Sans ships as one variable font, and Android sets its informality axis live.
+
+*Settings → light or dark* chooses like the phone, light, or dark, independent of the phone. The status-bar icons follow Burrow's choice. Dark is a warm charcoal "night notebook" (see the tokens below), not white on black: that combination made the thin hand strokes bloom and the yellow highlight glare.
+
+![type range](../explorations/spectrum-today.png)
+
 ## Tokens
 
 | Token | Light | Dark | Use |

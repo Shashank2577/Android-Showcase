@@ -65,86 +65,23 @@ import org.robolectric.annotation.GraphicsMode
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w412dp-h915dp-xhdpi")
-class ScreenshotsTest {
+open class ScreenshotsTest {
+    /** Subclasses render the same screens under another configuration, into files with this prefix. */
+    protected open val prefix = ""
+
     @get:Rule
     val compose = createComposeRule()
 
     private val app: ShowcaseApp get() = ApplicationProvider.getApplicationContext()
 
-    private fun shot(name: String) = compose.onRoot().captureRoboImage("build/shots/$name.png")
+    private fun shot(name: String) = compose.onRoot().captureRoboImage("build/shots/$prefix$name.png")
 
     private fun show(content: @Composable () -> Unit) = compose.setContent {
         BurrowTheme { CompositionLocalProvider(LocalModelHub provides app.hub) { content() } }
     }
 
     @Before
-    fun seed() = runBlocking {
-        WorkManagerTestInitHelper.initializeTestWorkManager(app)
-        val db = app.db
-        if (db.profiles().allNow().isNotEmpty()) return@runBlocking
-        val me = db.profiles().insert(ProfileEntity(name = "Sam Carter", colorIndex = 0, isMe = true, signatureCount = 3))
-        val priya = db.profiles().insert(ProfileEntity(name = "Priya Shah", colorIndex = 1, signatureCount = 4))
-        val marco = db.profiles().insert(ProfileEntity(name = "Marco Rossi", colorIndex = 2, signatureCount = 2))
-        val now = System.currentTimeMillis()
-        val topics = listOf(TopicScore("roadmap", "Roadmap", 0.8), TopicScore("budget", "Budget", 0.6), TopicScore("hiring", "Hiring", 0.4))
-        val lines = listOf(
-            0 to "Let's start with where the roadmap stands for Q3.",
-            1 to "Offline mode ships in November, at the same price as today.",
-            0 to "And the no-cloud promise holds for every plan?",
-            1 to "Yes. No cloud tier; everything keeps working without signal.",
-            2 to "The launch budget is agreed. The venue deposit is still open.",
-            0 to "Marco, can you send the budget by Friday?",
-            2 to "I'll send it Thursday, so we have a day to look.",
-            3 to "I can take the hiring plan if that helps.",
-            1 to "Then we book the launch venue next week.",
-        )
-        // Spread across the 42-minute talk, as a real one would be.
-        val utterances = lines.mapIndexed { i, (who, text) -> Utterance(who, i * 280.0 + 20, i * 280.0 + 20 + 60 + (i % 3) * 70, text) }
-        val q3 = db.meetings().insert(
-            MeetingEntity(
-                title = "Q3 roadmap sync", createdAt = now - 2 * 3_600_000L, durationSec = 2525.0, audioPath = "/nonexistent.m4a",
-                status = MeetingStatus.READY, language = "en", languageSupported = true,
-                transcriptText = utterances.joinToString(" ") { it.text },
-                utterancesJson = StoreJson.encodeToString(ListSerializer(Utterance.serializer()), utterances),
-                topicsJson = StoreJson.encodeToString(ListSerializer(TopicScore.serializer()), topics),
-                highlightsJson = StoreJson.encodeToString(ListSerializer(Moment.serializer()), listOf(Moment(1, 9.5, "Offline mode ships in November, at the same price."), Moment(0, 32.0, "No cloud tier — everything keeps working without signal."))),
-                followUpsJson = StoreJson.encodeToString(ListSerializer(Moment.serializer()), listOf(Moment(1, 24.5, "Marco will send the budget by Thursday."), Moment(3, 30.5, "Take the hiring plan."))),
-                speakerCount = 4,
-            ),
-        )
-        val mum = db.meetings().insert(
-            MeetingEntity(
-                title = "call with Mum", createdAt = now - 26 * 3_600_000L, durationSec = 1090.0, audioPath = "/nonexistent2.m4a",
-                source = MeetingSource.CALL, status = MeetingStatus.READY, speakerCount = 2,
-                topicsJson = StoreJson.encodeToString(ListSerializer(TopicScore.serializer()), listOf(TopicScore("family", "Family", 0.7), TopicScore("travel", "Travel", 0.5))),
-            ),
-        )
-        db.meetings().insert(
-            MeetingEntity(
-                title = "Hindi talk · Tue 28 Oct, 18:05", createdAt = now - 30 * 3_600_000L, durationSec = 840.0, audioPath = "/nonexistent4.m4a",
-                status = MeetingStatus.FAILED, language = "hi", languageSupported = false,
-                error = "This talk is in Hindi. Download Hindi (about 140 MB, once) and Burrow can write its notes.",
-            ),
-        )
-        db.meetings().insert(
-            MeetingEntity(title = "design crit", createdAt = now - 20 * 60_000L, durationSec = 1860.0, audioPath = "/nonexistent3.m4a", status = MeetingStatus.PROCESSING, progress = "Transcribing part 2 of 3"),
-        )
-        db.speakers().insert(
-            listOf(
-                MeetingSpeakerEntity(meetingId = q3, index = 0, profileId = me, talkSec = 600.0, words = 900),
-                MeetingSpeakerEntity(meetingId = q3, index = 1, profileId = priya, talkSec = 1000.0, words = 1500, topicsJson = StoreJson.encodeToString(ListSerializer(TopicScore.serializer()), topics.take(2))),
-                MeetingSpeakerEntity(meetingId = q3, index = 2, profileId = marco, talkSec = 700.0, words = 1000, topicsJson = StoreJson.encodeToString(ListSerializer(TopicScore.serializer()), topics.drop(1))),
-                MeetingSpeakerEntity(meetingId = q3, index = 3, talkSec = 220.0, words = 310, sampleQuote = "I can take the hiring plan if that helps."),
-                MeetingSpeakerEntity(meetingId = mum, index = 0, profileId = me, talkSec = 500.0, words = 700),
-                MeetingSpeakerEntity(meetingId = mum, index = 1, talkSec = 590.0, words = 820, sampleQuote = "Let's check the train times tomorrow."),
-            ),
-        )
-        app.ledger.add(LedgerEntry.PHOTOS_CHECKED, 312)
-        app.ledger.add(LedgerEntry.TALKS_TRANSCRIBED, 1)
-        app.ledger.add(LedgerEntry.TEXTS_MASKED, 2)
-        app.ledger.add(LedgerEntry.VOICES_LEARNED, 1)
-        app.privacy.setOnboarded(true)
-    }
+    fun seed() = seedSampleData(app)
 
     @Test fun welcome() { show { WelcomeScreen {} }; shot("01-welcome") }
 
@@ -277,3 +214,78 @@ class ScreenshotsTest {
         shot("15-fold-inner-talks")
     }
 }
+
+/** Every screen again in dark mode, to check contrast. */
+@Config(sdk = [34], qualifiers = "w412dp-h915dp-night-xhdpi")
+class DarkScreenshotsTest : ScreenshotsTest() {
+    override val prefix = "dark-"
+}
+
+/** Sample people, talks and ledger entries shared by the screenshot tests. */
+fun seedSampleData(app: ShowcaseApp) = runBlocking {
+        WorkManagerTestInitHelper.initializeTestWorkManager(app)
+        val db = app.db
+        if (db.profiles().allNow().isNotEmpty()) return@runBlocking
+        val me = db.profiles().insert(ProfileEntity(name = "Sam Carter", colorIndex = 0, isMe = true, signatureCount = 3))
+        val priya = db.profiles().insert(ProfileEntity(name = "Priya Shah", colorIndex = 1, signatureCount = 4))
+        val marco = db.profiles().insert(ProfileEntity(name = "Marco Rossi", colorIndex = 2, signatureCount = 2))
+        val now = System.currentTimeMillis()
+        val topics = listOf(TopicScore("roadmap", "Roadmap", 0.8), TopicScore("budget", "Budget", 0.6), TopicScore("hiring", "Hiring", 0.4))
+        val lines = listOf(
+            0 to "Let's start with where the roadmap stands for Q3.",
+            1 to "Offline mode ships in November, at the same price as today.",
+            0 to "And the no-cloud promise holds for every plan?",
+            1 to "Yes. No cloud tier; everything keeps working without signal.",
+            2 to "The launch budget is agreed. The venue deposit is still open.",
+            0 to "Marco, can you send the budget by Friday?",
+            2 to "I'll send it Thursday, so we have a day to look.",
+            3 to "I can take the hiring plan if that helps.",
+            1 to "Then we book the launch venue next week.",
+        )
+        // Spread across the 42-minute talk, as a real one would be.
+        val utterances = lines.mapIndexed { i, (who, text) -> Utterance(who, i * 280.0 + 20, i * 280.0 + 20 + 60 + (i % 3) * 70, text) }
+        val q3 = db.meetings().insert(
+            MeetingEntity(
+                title = "Q3 roadmap sync", createdAt = now - 2 * 3_600_000L, durationSec = 2525.0, audioPath = "/nonexistent.m4a",
+                status = MeetingStatus.READY, language = "en", languageSupported = true,
+                transcriptText = utterances.joinToString(" ") { it.text },
+                utterancesJson = StoreJson.encodeToString(ListSerializer(Utterance.serializer()), utterances),
+                topicsJson = StoreJson.encodeToString(ListSerializer(TopicScore.serializer()), topics),
+                highlightsJson = StoreJson.encodeToString(ListSerializer(Moment.serializer()), listOf(Moment(1, 9.5, "Offline mode ships in November, at the same price."), Moment(0, 32.0, "No cloud tier — everything keeps working without signal."))),
+                followUpsJson = StoreJson.encodeToString(ListSerializer(Moment.serializer()), listOf(Moment(1, 24.5, "Marco will send the budget by Thursday."), Moment(3, 30.5, "Take the hiring plan."))),
+                speakerCount = 4,
+            ),
+        )
+        val mum = db.meetings().insert(
+            MeetingEntity(
+                title = "call with Mum", createdAt = now - 26 * 3_600_000L, durationSec = 1090.0, audioPath = "/nonexistent2.m4a",
+                source = MeetingSource.CALL, status = MeetingStatus.READY, speakerCount = 2,
+                topicsJson = StoreJson.encodeToString(ListSerializer(TopicScore.serializer()), listOf(TopicScore("family", "Family", 0.7), TopicScore("travel", "Travel", 0.5))),
+            ),
+        )
+        db.meetings().insert(
+            MeetingEntity(
+                title = "Hindi talk · Tue 28 Oct, 18:05", createdAt = now - 30 * 3_600_000L, durationSec = 840.0, audioPath = "/nonexistent4.m4a",
+                status = MeetingStatus.FAILED, language = "hi", languageSupported = false,
+                error = "This talk is in Hindi. Download Hindi (about 140 MB, once) and Burrow can write its notes.",
+            ),
+        )
+        db.meetings().insert(
+            MeetingEntity(title = "design crit", createdAt = now - 20 * 60_000L, durationSec = 1860.0, audioPath = "/nonexistent3.m4a", status = MeetingStatus.PROCESSING, progress = "Transcribing part 2 of 3"),
+        )
+        db.speakers().insert(
+            listOf(
+                MeetingSpeakerEntity(meetingId = q3, index = 0, profileId = me, talkSec = 600.0, words = 900),
+                MeetingSpeakerEntity(meetingId = q3, index = 1, profileId = priya, talkSec = 1000.0, words = 1500, topicsJson = StoreJson.encodeToString(ListSerializer(TopicScore.serializer()), topics.take(2))),
+                MeetingSpeakerEntity(meetingId = q3, index = 2, profileId = marco, talkSec = 700.0, words = 1000, topicsJson = StoreJson.encodeToString(ListSerializer(TopicScore.serializer()), topics.drop(1))),
+                MeetingSpeakerEntity(meetingId = q3, index = 3, talkSec = 220.0, words = 310, sampleQuote = "I can take the hiring plan if that helps."),
+                MeetingSpeakerEntity(meetingId = mum, index = 0, profileId = me, talkSec = 500.0, words = 700),
+                MeetingSpeakerEntity(meetingId = mum, index = 1, talkSec = 590.0, words = 820, sampleQuote = "Let's check the train times tomorrow."),
+            ),
+        )
+        app.ledger.add(LedgerEntry.PHOTOS_CHECKED, 312)
+        app.ledger.add(LedgerEntry.TALKS_TRANSCRIBED, 1)
+        app.ledger.add(LedgerEntry.TEXTS_MASKED, 2)
+        app.ledger.add(LedgerEntry.VOICES_LEARNED, 1)
+        app.privacy.setOnboarded(true)
+    }

@@ -32,12 +32,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.showcase.desertant.app
 import com.showcase.desertant.core.languageName
 import com.showcase.desertant.ui.hand.Doodle
@@ -53,7 +51,7 @@ import com.showcase.desertant.ui.hand.PillButton
 import com.showcase.desertant.ui.hand.StepHead
 import com.showcase.desertant.ui.privacy.SecureScreen
 import com.showcase.desertant.ui.theme.Hand
-import com.showcase.desertant.ui.theme.Inter
+import com.showcase.desertant.ui.theme.bodyStyle
 import com.showcase.desertant.ui.theme.burrow
 import kotlinx.coroutines.launch
 
@@ -95,6 +93,7 @@ fun MaskScreen(onBack: (() -> Unit)?, initial: String = "", onReplace: ((String)
             "mask a message.",
             "Before text goes into ChatGPT, an email or a form, Burrow swaps names, numbers and addresses for placeholders. Paste the reply back and the real details return.",
             mark = "mask",
+            doodle = Doodle.MASK,
         )
         StepHead(1, "paste your text", done = current != null)
         HandField(text, { text = it }, placeholder = "Hi, I'm Sam Carter, card 4111 1111 1111 1111 — call me on +44 7700 900123…", minHeight = 120.dp)
@@ -122,7 +121,7 @@ fun MaskScreen(onBack: (() -> Unit)?, initial: String = "", onReplace: ((String)
                     .border(1.8.dp, ink, RoundedCornerShape(16.dp))
                     .padding(18.dp),
             ) {
-                SelectionContainer { Text(highlight(current.text, PLACEHOLDER, marker, markerInk), style = TextStyle(fontFamily = Inter, fontSize = 16.sp, lineHeight = 25.sp), color = ink) }
+                SelectionContainer { Text(highlight(current.text, PLACEHOLDER, marker, markerInk), style = bodyStyle(16f, 25f), color = ink) }
                 Spacer(Modifier.height(10.dp))
                 Meta("reversible on this phone only")
             }
@@ -151,7 +150,7 @@ fun MaskScreen(onBack: (() -> Unit)?, initial: String = "", onReplace: ((String)
                 Spacer(Modifier.height(8.dp))
                 Column(Modifier.fillMaxWidth().border(1.4.dp, burrow.rule, RoundedCornerShape(16.dp)).padding(18.dp)) {
                     SelectionContainer {
-                        Text(restoredText(restored, current.redaction.items.map { it.original }, ink), style = TextStyle(fontFamily = Inter, fontSize = 16.sp, lineHeight = 25.sp), color = ink)
+                        Text(restoredText(restored, current.redaction.items.map { it.original }, ink), style = bodyStyle(16f, 25f), color = ink)
                     }
                 }
                 Spacer(Modifier.height(10.dp))

@@ -53,7 +53,7 @@ import com.showcase.desertant.ui.hand.MarkedText
 import com.showcase.desertant.ui.hand.Meta
 import com.showcase.desertant.ui.hand.Snapshot
 import com.showcase.desertant.ui.hand.DoodleButton
-import com.showcase.desertant.ui.theme.BurrowTheme
+import com.showcase.desertant.ui.theme.AppTheme
 import com.showcase.desertant.ui.theme.Hand
 import com.showcase.desertant.ui.theme.burrow
 import kotlinx.coroutines.launch
@@ -73,7 +73,7 @@ class ShareCheckActivity : ComponentActivity() {
             return
         }
         setContent {
-            BurrowTheme {
+            AppTheme {
                 ShareCheckScreen(
                     uri,
                     onClose = ::finish,

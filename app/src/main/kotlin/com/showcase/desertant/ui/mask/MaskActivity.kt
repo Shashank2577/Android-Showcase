@@ -5,7 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.showcase.desertant.ui.theme.BurrowTheme
+import com.showcase.desertant.ui.theme.AppTheme
 
 /**
  * Mask from anywhere: "Mask with Burrow" in any app's text-selection menu
@@ -21,7 +21,7 @@ class MaskActivity : ComponentActivity() {
             else intent?.getStringExtra(Intent.EXTRA_TEXT)
         val editable = processText && !intent.getBooleanExtra(Intent.EXTRA_PROCESS_TEXT_READONLY, false)
         setContent {
-            BurrowTheme {
+            AppTheme {
                 MaskScreen(
                     onBack = ::finish,
                     initial = text.orEmpty(),

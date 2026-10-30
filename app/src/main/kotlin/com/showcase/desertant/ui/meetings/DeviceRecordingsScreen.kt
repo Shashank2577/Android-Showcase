@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.outlined.Call
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -77,7 +76,7 @@ fun DeviceRecordingsScreen(onBack: () -> Unit) {
         onBack = onBack,
         bottom = if (fresh.size > 1) ({ InkButton("bring in all ${fresh.size} new calls", { fresh.forEach { import(it) } }, Modifier.fillMaxWidth()) }) else null,
     ) {
-        PageIntro("calls & recordings", "Recordings other apps saved on this phone. Bring one in and Burrow writes its notes, like any talk.")
+        PageIntro("calls & recordings", "Recordings other apps saved on this phone. Bring one in and Burrow writes its notes, like any talk.", doodle = Doodle.PHONE)
         when {
             !granted -> {
                 Steps(

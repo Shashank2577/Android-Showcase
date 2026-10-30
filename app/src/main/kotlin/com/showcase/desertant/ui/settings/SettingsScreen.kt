@@ -32,6 +32,7 @@ import com.showcase.desertant.core.ModelKind
 import com.showcase.desertant.core.ModelStatus
 import com.showcase.desertant.ui.components.LocalModelHub
 import com.showcase.desertant.ui.hand.Body
+import com.showcase.desertant.ui.hand.Doodle
 import com.showcase.desertant.ui.hand.Door
 import com.showcase.desertant.ui.hand.HandDivider
 import com.showcase.desertant.ui.hand.HandField
@@ -77,7 +78,7 @@ fun SettingsScreen(onBack: () -> Unit, openLab: () -> Unit) {
     LaunchedEffect(status) { cacheBytes = hub.cacheBytes() }
 
     HandPage(onBack = onBack) {
-        PageIntro("the models", "The AI behind Burrow. Each one is downloaded once, then runs on this phone's own chip — your photos, voices and words never go to it over the internet.")
+        PageIntro(doodle = Doodle.SPARK, title = "the models", purpose = "The AI behind Burrow. Each one is downloaded once, then runs on this phone's own chip — your photos, voices and words never go to it over the internet.")
         Meta("${Formatter.formatShortFileSize(context, cacheBytes)} on this phone · ai.desertant ${BuildConfig.DESERT_ANT_SDK_VERSION}")
         if (neverOnline) Body("“Never go online” is on, so missing models can't be downloaded. Turn it off on the privacy page to fetch them once.", Modifier.padding(top = 8.dp), color = burrow.redPen)
         Spacer(Modifier.height(10.dp))

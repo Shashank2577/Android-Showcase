@@ -62,8 +62,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -71,7 +71,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.showcase.desertant.ui.theme.Hand
-import com.showcase.desertant.ui.theme.Inter
+import com.showcase.desertant.ui.theme.bodyStyle
 import com.showcase.desertant.ui.theme.burrow
 import kotlin.math.PI
 import kotlin.math.cos
@@ -212,13 +212,13 @@ fun HandDivider(modifier: Modifier = Modifier, seed: Int = 1) {
 /** Quiet secondary text. */
 @Composable
 fun Meta(text: String, modifier: Modifier = Modifier, color: Color = burrow.pencil, textAlign: TextAlign? = null, maxLines: Int = Int.MAX_VALUE) {
-    Text(text, modifier, style = TextStyle(fontFamily = Inter, fontSize = 13.sp, lineHeight = 18.sp), color = color, textAlign = textAlign, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+    Text(text, modifier, style = bodyStyle(13f, 18f), color = color, textAlign = textAlign, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
 }
 
 /** Explanations. */
 @Composable
 fun Body(text: String, modifier: Modifier = Modifier, color: Color = burrow.ink, textAlign: TextAlign? = null) {
-    Text(text, modifier, style = TextStyle(fontFamily = Inter, fontSize = 15.sp, lineHeight = 22.sp), color = color, textAlign = textAlign)
+    Text(text, modifier, style = bodyStyle(15f, 22f), color = color, textAlign = textAlign)
 }
 
 /** The primary action: a black pill with hand-lettered white text. One per screen. */
@@ -471,7 +471,7 @@ fun HandField(
     minHeight: Dp = 0.dp,
     leading: Doodle? = null,
     keyboardType: KeyboardType = KeyboardType.Text,
-    textStyle: TextStyle = TextStyle(fontFamily = Inter, fontSize = 16.sp, lineHeight = 23.sp),
+    textStyle: TextStyle = bodyStyle(16f, 23f),
 ) {
     val c = burrow
     BasicTextField(
@@ -650,11 +650,36 @@ fun PillButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier,
  * Every screen starts with one, so nobody has to guess.
  */
 @Composable
-fun PageIntro(title: String, purpose: String, modifier: Modifier = Modifier, mark: String? = null) {
+fun PageIntro(title: String, purpose: String, modifier: Modifier = Modifier, mark: String? = null, doodle: Doodle? = null) {
     Column(modifier.fillMaxWidth().padding(bottom = 18.dp)) {
-        MarkedText(title, mark = mark, style = Hand.headline)
+        Row(verticalAlignment = Alignment.Bottom) {
+            MarkedText(title, Modifier.weight(1f, fill = false), mark = mark, style = Hand.headline)
+            // A small drawing of what the page is about, tilted like a margin sketch.
+            if (doodle != null) DoodleIcon(doodle, null, Modifier.padding(start = 12.dp, bottom = 6.dp).rotate(-8f), size = 40.dp, color = burrow.pencil, stroke = 1.8.dp)
+        }
         Spacer(Modifier.height(4.dp))
         Body(purpose, color = burrow.pencil)
+    }
+}
+
+/** A choice drawn as a pill: filled in ink when it's the one picked. */
+@Composable
+fun ChoicePill(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, leading: Doodle? = null) {
+    val c = burrow
+    Row(
+        modifier
+            .heightIn(min = 44.dp)
+            .clip(CircleShape)
+            .then(if (selected) Modifier.background(c.ink) else Modifier.border(1.6.dp, c.ink, CircleShape))
+            .clickable(role = Role.RadioButton, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (leading != null) {
+            DoodleIcon(leading, null, size = 18.dp, color = if (selected) c.paper else c.ink)
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(text, style = Hand.label, color = if (selected) c.paper else c.ink, maxLines = 1, softWrap = false)
     }
 }
 
@@ -673,7 +698,7 @@ fun Steps(steps: List<String>, modifier: Modifier = Modifier, current: Int = -1)
                     contentAlignment = Alignment.Center,
                 ) { Text("${i + 1}", style = Hand.small.copy(fontSize = 15.sp), color = if (on) burrow.paper else burrow.ink) }
                 Spacer(Modifier.width(10.dp))
-                Text(step, style = TextStyle(fontFamily = Inter, fontSize = 14.sp, lineHeight = 19.sp), color = if (current < 0 || on) burrow.ink else burrow.pencil)
+                Text(step, style = bodyStyle(14f, 19f), color = if (current < 0 || on) burrow.ink else burrow.pencil)
             }
         }
     }

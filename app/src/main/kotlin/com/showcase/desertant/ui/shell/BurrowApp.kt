@@ -58,6 +58,7 @@ import com.showcase.desertant.ui.photos.ReviewKind
 import com.showcase.desertant.ui.photos.SweepScreen
 import com.showcase.desertant.ui.photos.VaultScreen
 import com.showcase.desertant.ui.privacy.PrivacyScreen
+import com.showcase.desertant.ui.settings.AppSettingsScreen
 import com.showcase.desertant.ui.settings.SettingsScreen
 import com.showcase.desertant.ui.theme.Hand
 import com.showcase.desertant.ui.theme.burrow
@@ -117,11 +118,12 @@ fun BurrowApp(hub: ModelHub, deepLink: String?, onDeepLinkHandled: () -> Unit) {
                 }
                 composable("mask") { MaskScreen(onBack = back) }
                 composable("privacy") {
-                    PrivacyScreen(onBack = back, openModels = { go("settings") }, onWiped = {
+                    PrivacyScreen(onBack = back, openModels = { go("models") }, onWiped = {
                         nav.navigate("welcome") { popUpTo(0) { inclusive = true } }
                     })
                 }
-                composable("settings") { SettingsScreen(onBack = back, openLab = { go("lab") }) }
+                composable("settings") { AppSettingsScreen(onBack = back, open = go) }
+                composable("models") { SettingsScreen(onBack = back, openLab = { go("lab") }) }
                 labGraph(nav)
             }
             if (tab != null) HandNav(tab, onSelect = { nav.switchTab(it.route) })

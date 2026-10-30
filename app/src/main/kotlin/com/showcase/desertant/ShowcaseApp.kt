@@ -15,6 +15,7 @@ import com.showcase.desertant.privacy.MaskSession
 import com.showcase.desertant.privacy.PrivacySettings
 import com.showcase.desertant.privacy.Vault
 import com.showcase.desertant.speech.SpeechPacks
+import com.showcase.desertant.ui.theme.Appearance
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -38,6 +39,8 @@ class ShowcaseApp : Application() {
         private set
     lateinit var mask: MaskSession
         private set
+    lateinit var appearance: Appearance
+        private set
 
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -59,6 +62,7 @@ class ShowcaseApp : Application() {
     override fun onCreate() {
         super.onCreate()
         privacy = PrivacySettings(this)
+        appearance = Appearance(this)
         ledger = Ledger(this)
         hub = ModelHub(this) { privacy.neverOnline.value }
         // Must be set before the first model loads; covers every model in the app.

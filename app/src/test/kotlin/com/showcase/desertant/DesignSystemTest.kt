@@ -43,6 +43,7 @@ import com.showcase.desertant.ui.hand.Meta
 import com.showcase.desertant.ui.hand.SectionHead
 import com.showcase.desertant.ui.hand.Snapshot
 import com.showcase.desertant.ui.theme.BurrowTheme
+import com.showcase.desertant.ui.theme.ThemeMode
 import com.showcase.desertant.ui.theme.Hand
 import com.showcase.desertant.ui.theme.burrow
 import org.junit.Rule
@@ -61,12 +62,12 @@ class DesignSystemTest {
     val compose = createComposeRule()
 
     @Test fun light() {
-        compose.setContent { BurrowTheme(dark = false) { Sheet() } }
+        compose.setContent { BurrowTheme(ThemeMode.LIGHT) { Sheet() } }
         compose.onRoot().captureRoboImage("build/shots/00-design-system.png")
     }
 
     @Test fun dark() {
-        compose.setContent { BurrowTheme(dark = true) { Sheet() } }
+        compose.setContent { BurrowTheme(ThemeMode.DARK) { Sheet() } }
         compose.onRoot().captureRoboImage("build/shots/00-design-system-dark.png")
     }
 }

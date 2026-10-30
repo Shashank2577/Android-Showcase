@@ -91,7 +91,7 @@ fun MeetingsHome(open: (String) -> Unit) {
     }
 
     val list = @Composable {
-        HandPage(topEnd = { DoodleButton(Doodle.LOCK, "Privacy", { open("privacy") }) }) {
+        HandPage(topEnd = { DoodleButton(Doodle.GEAR, "Settings", { open("settings") }); DoodleButton(Doodle.LOCK, "Privacy", { open("privacy") }) }) {
             Row(verticalAlignment = Alignment.Top) {
                 PageIntro(
                     "talks",

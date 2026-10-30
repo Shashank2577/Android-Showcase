@@ -147,7 +147,7 @@ fun VaultScreen(onBack: () -> Unit) {
     ) {
         when {
             !unlocked -> {
-                PageIntro("the vault", "Photos you don't want anyone scrolling past: IDs, cards, medical, intimate. Encrypted on this phone, never in a cloud backup.")
+                PageIntro("the vault", "Photos you don't want anyone scrolling past: IDs, cards, medical, intimate. Encrypted on this phone, never in a cloud backup.", doodle = Doodle.HEART)
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     DoodleIcon(Doodle.LOCK, null, size = 84.dp, stroke = 2.4.dp)
                 }

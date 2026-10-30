@@ -111,8 +111,8 @@ fun PhotosHome(open: (String) -> Unit) {
         PhotoScanWorker.start(context, PhotoScope(album?.id, album?.name, days))
     }
 
-    HandPage(topEnd = { DoodleButton(Doodle.LOCK, "Privacy", { open("privacy") }) }) {
-        PageIntro("photos", "Free up space and keep private photos out of sight. Burrow checks them on this phone; nothing is uploaded.")
+    HandPage(topEnd = { DoodleButton(Doodle.GEAR, "Settings", { open("settings") }); DoodleButton(Doodle.LOCK, "Privacy", { open("privacy") }) }) {
+        PageIntro("photos", "Free up space and keep private photos out of sight. Burrow checks them on this phone; nothing is uploaded.", doodle = Doodle.CAMERA)
 
         if (!granted) {
             Steps(listOf("Let Burrow see your photos", "It looks through them, on the phone", "You decide what to let go and what to lock away"), current = 0)

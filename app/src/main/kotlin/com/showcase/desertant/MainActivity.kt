@@ -12,7 +12,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.showcase.desertant.ui.shell.BurrowApp
-import com.showcase.desertant.ui.theme.BurrowTheme
+import com.showcase.desertant.ui.theme.AppTheme
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -36,7 +36,7 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            BurrowTheme {
+            AppTheme {
                 BurrowApp(app.hub, deepLink.value) { deepLink.value = null }
             }
         }

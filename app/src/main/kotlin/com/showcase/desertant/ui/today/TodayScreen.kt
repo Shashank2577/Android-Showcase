@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -14,8 +15,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,6 +37,7 @@ import com.showcase.desertant.ui.common.formatBytes
 import com.showcase.desertant.ui.hand.Body
 import com.showcase.desertant.ui.hand.Doodle
 import com.showcase.desertant.ui.hand.DoodleButton
+import com.showcase.desertant.ui.hand.DoodleIcon
 import com.showcase.desertant.ui.hand.Door
 import com.showcase.desertant.ui.hand.HandDivider
 import com.showcase.desertant.ui.hand.HandPage
@@ -74,10 +78,13 @@ fun TodayScreen(open: (String) -> Unit) {
 
     HandPage(
         wordmark = true,
-        topEnd = { DoodleButton(Doodle.LOCK, "Privacy", { open("privacy") }) },
+        topEnd = { DoodleButton(Doodle.GEAR, "Settings", { open("settings") }); DoodleButton(Doodle.LOCK, "Privacy", { open("privacy") }) },
     ) {
         Spacer(Modifier.height(20.dp))
-        Text(if (me != null) "$greeting, $me." else "$greeting.", style = Hand.headline.copy(fontSize = 44.sp), color = burrow.ink)
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(if (me != null) "$greeting, $me." else "$greeting.", Modifier.weight(1f, fill = false), style = Hand.headline.copy(fontSize = 44.sp), color = burrow.ink)
+            DoodleIcon(if (now.hour in 6..17) Doodle.SUN else Doodle.MOON, null, Modifier.padding(start = 10.dp, bottom = 8.dp).rotate(-10f), size = 36.dp, color = burrow.pencil)
+        }
         Meta(
             now.format(DateTimeFormatter.ofPattern("EEE d MMM")) + "  ·  " +
                 if (checkedToday > 0) "$checkedToday photos checked, all on this phone" else "everything stays on this phone",
@@ -90,11 +97,11 @@ fun TodayScreen(open: (String) -> Unit) {
         scan?.let { w ->
             val done = w.progress.getInt(PhotoScanWorker.KEY_DONE, 0)
             val total = w.progress.getInt(PhotoScanWorker.KEY_TOTAL, 0)
-            Door("looking through your photos…", { open("photos") }, meta = if (total > 0) "$done of $total checked — keeps going if you leave" else "getting ready")
+            Door("looking through your photos…", { open("photos") }, meta = if (total > 0) "$done of $total checked — keeps going if you leave" else "getting ready", leading = { DoodleIcon(Doodle.CAMERA, null, size = 28.dp) })
             doors++
         }
         (recorder as? RecorderState.Recording)?.let {
-            Door("recording now — tap to see it", { open("record") }, mark = "recording now")
+            Door("recording now — tap to see it", { open("record") }, mark = "recording now", leading = { DoodleIcon(Doodle.MIC, null, size = 28.dp) })
             doors++
         }
 
@@ -102,25 +109,25 @@ fun TodayScreen(open: (String) -> Unit) {
         val tidyBytes = (i?.duplicateBytes ?: 0) + (i?.junkBytes ?: 0)
         when {
             scan == null && (i == null || i.analyzed == 0) -> {
-                Door("let Burrow look through your photos", { open("photos") }, meta = "it finds extra shots and private things, on the phone")
+                Door("let Burrow look through your photos", { open("photos") }, meta = "it finds extra shots and private things, on the phone", leading = { DoodleIcon(Doodle.CAMERA, null, size = 28.dp) })
                 doors++
             }
             tidyBytes > 0 -> {
                 val size = formatBytes(context, tidyBytes)
-                Door("$size of extra shots to tidy", { open("photos/review/${ReviewKind.SIMILAR.name}") }, mark = size)
+                Door("$size of extra shots to tidy", { open("photos/review/${ReviewKind.SIMILAR.name}") }, mark = size, leading = { DoodleIcon(Doodle.CAMERA, null, size = 28.dp) })
                 doors++
             }
         }
         if ((i?.privateCount ?: 0) > 0) {
-            Door("${i!!.privateCount} private photos in plain sight", { open("sweep") }, alert = true)
+            Door("${i!!.privateCount} private photos in plain sight", { open("sweep") }, alert = true, leading = { DoodleIcon(Doodle.EYE_OFF, null, size = 28.dp) })
             doors++
         }
 
         val cutoff = System.currentTimeMillis() - 3 * 86_400_000L
         meetings.filter { it.createdAt > cutoff }.take(2).forEach { m ->
             when (m.status) {
-                MeetingStatus.READY -> Door("${m.title} — notes are ready", { open("meeting/${m.id}") })
-                MeetingStatus.QUEUED, MeetingStatus.PROCESSING -> Door("${m.title} — writing notes…", { open("meeting/${m.id}") }, meta = m.progress)
+                MeetingStatus.READY -> Door("${m.title} — notes are ready", { open("meeting/${m.id}") }, leading = { DoodleIcon(Doodle.BUBBLE, null, size = 28.dp) })
+                MeetingStatus.QUEUED, MeetingStatus.PROCESSING -> Door("${m.title} — writing notes…", { open("meeting/${m.id}") }, meta = m.progress, leading = { DoodleIcon(Doodle.BUBBLE, null, size = 28.dp) })
                 MeetingStatus.FAILED -> Door(
                     "${m.title} — needs you", { open("meeting/${m.id}") },
                     meta = SpeechPacks.route(m.language)?.takeIf { m.languageSupported == false }
@@ -134,13 +141,16 @@ fun TodayScreen(open: (String) -> Unit) {
 
         val unnamed = speakers.count { it.profileId == null && !it.dismissed && it.words > 20 }
         if (unnamed > 0) {
-            Door(if (unnamed == 1) "1 voice to name" else "$unnamed voices to name", { open("people") })
+            Door(if (unnamed == 1) "1 voice to name" else "$unnamed voices to name", { open("people") }, leading = { DoodleIcon(Doodle.PEOPLE, null, size = 28.dp) })
             doors++
         }
 
         if (doors == 0) {
             Spacer(Modifier.height(8.dp))
-            MarkedText("all quiet.", mark = "quiet", style = Hand.title)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                MarkedText("all quiet.", mark = "quiet", style = Hand.title)
+                DoodleIcon(Doodle.HEART, null, Modifier.padding(start = 8.dp).rotate(8f), size = 26.dp, color = burrow.pencil)
+            }
             Body("Nothing needs you right now. Record a talk, or mask a message below.", color = burrow.pencil)
         }
 

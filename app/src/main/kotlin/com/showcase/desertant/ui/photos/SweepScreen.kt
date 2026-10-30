@@ -139,7 +139,7 @@ fun SweepScreen(onBack: () -> Unit, openVault: () -> Unit) {
             return@HandPage
         }
         val n = found.values.sumOf { it.size }.toString()
-        PageIntro("found $n private photos", "Anyone scrolling your gallery could see these. Move them into the vault, where only your fingerprint opens them.", mark = n)
+        PageIntro("found $n private photos", "Anyone scrolling your gallery could see these. Move them into the vault, where only your fingerprint opens them.", mark = n, doodle = Doodle.EYE_OFF)
         Steps(listOf("Untick any photo that isn't private", "Confirm with your fingerprint", "Android asks to delete the originals — say yes"))
         Spacer(Modifier.height(12.dp))
         problem?.let { Body(it, Modifier.padding(bottom = 10.dp), color = burrow.redPen) }

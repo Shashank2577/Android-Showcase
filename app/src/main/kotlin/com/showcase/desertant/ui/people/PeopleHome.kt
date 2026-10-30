@@ -79,9 +79,11 @@ fun PeopleHome(open: (String) -> Unit) {
         .sortedByDescending { ready[it.meetingId]?.createdAt ?: 0 }
 
     val list = @Composable {
-        HandPage(topEnd = { DoodleButton(Doodle.LOCK, "Privacy", { open("privacy") }) }) {
+        HandPage(topEnd = { DoodleButton(Doodle.GEAR, "Settings", { open("settings") }); DoodleButton(Doodle.LOCK, "Privacy", { open("privacy") }) }) {
             PageIntro(
-                "people",
+                doodle = Doodle.PEOPLE,
+                title = "people",
+                purpose =
                 if (learnVoices) "Everyone you've named in a talk: what you talk about and every conversation. Burrow learns a voice only when you name someone."
                 else "Everyone you've named in a talk. Voice learning is off, so Burrow won't suggest people in new talks.",
             )
