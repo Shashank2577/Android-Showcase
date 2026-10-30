@@ -2,6 +2,7 @@ package com.showcase.desertant
 
 import com.showcase.desertant.speech.CtcDecoder
 import com.showcase.desertant.speech.MelFeatures
+import com.showcase.desertant.speech.SpeechPacks
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -49,6 +50,53 @@ class SpeechTest {
         assertEquals(0.08, words[0].start, 1e-9)
         assertEquals(0.32, words[0].end, 1e-9)
         assertEquals(0.48, words[1].start, 1e-9)
+    }
+
+    @Test fun characterModelsBreakWordsOnSpaceTokens() {
+        val f = File.createTempFile("tokens", ".txt").apply { writeText("<s> 0\n<pad> 1\n</s> 2\n<unk> 3\n  4\nक 5\nा 6\nम 7\n| 8\n") }
+        val d = CtcDecoder.fromTokensFile(f, blankId = 0)
+        fun one(i: Int) = FloatArray(9).also { it[i] = 1f }
+        val words = d.decode(arrayOf(one(5), one(6), one(0), one(4), one(7), one(0), one(8), one(5)), 0.02)
+        assertEquals(listOf("का", "म", "क"), words.map { it.text })
+    }
+
+    @Test fun talksAreRoutedToTheRightModel() {
+        assertEquals(null, SpeechPacks.route("de"))
+        assertEquals(null, SpeechPacks.route(null))
+        assertEquals("hi", SpeechPacks.route("hi")?.code)
+        assertEquals("ta", SpeechPacks.route("tam")?.code)
+        assertEquals("or", SpeechPacks.route("ory")?.code)
+        assertEquals(SpeechPacks.UNIVERSAL_CODE, SpeechPacks.route("sw")?.code)
+        assertEquals(22, SpeechPacks.INDIAN.size)
+    }
+
+    /**
+     * Writes Kotlin's features for a real clip, to compare against the Python
+     * reference that scored 11.8% WER on FLEURS Hindi. Runs only with BURROW_WAV set.
+     */
+    @Test fun dumpFeaturesForComparison() {
+        val wav = System.getenv("BURROW_WAV") ?: return
+        val bytes = File(wav).readBytes()
+        val bb = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        var pos = 12
+        var data = 0 to 0
+        var bits = 16
+        while (pos < bytes.size - 8) {
+            val id = String(bytes, pos, 4)
+            val size = bb.getInt(pos + 4)
+            if (id == "fmt ") bits = bb.getShort(pos + 22).toInt()
+            if (id == "data") { data = pos + 8 to size; break }
+            pos += 8 + size
+        }
+        val n = data.second / (bits / 8)
+        val samples = FloatArray(n) { i ->
+            if (bits == 16) bb.getShort(data.first + i * 2) / 32768f else bb.getFloat(data.first + i * 4)
+        }
+        val mel = MelFeatures.compute(samples)
+        val out = java.io.DataOutputStream(File(System.getenv("BURROW_OUT") ?: "build/mel.bin").outputStream().buffered())
+        out.writeInt(mel.size)
+        mel.forEach { row -> row.forEach { out.writeFloat(it) } }
+        out.close()
     }
 
     @Test fun readsSherpaTokensFiles() {

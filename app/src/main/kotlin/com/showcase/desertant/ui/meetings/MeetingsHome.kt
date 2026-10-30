@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.showcase.desertant.app
 import com.showcase.desertant.audio.formatClock
+import com.showcase.desertant.core.languageName
 import com.showcase.desertant.data.MeetingEntity
 import com.showcase.desertant.data.MeetingSource
 import com.showcase.desertant.data.MeetingStatus
@@ -45,7 +46,7 @@ import com.showcase.desertant.data.ProfileEntity
 import com.showcase.desertant.meetings.MeetingImporter
 import com.showcase.desertant.meetings.RecorderService
 import com.showcase.desertant.meetings.RecorderState
-import com.showcase.desertant.speech.IndicSpeech
+import com.showcase.desertant.speech.SpeechPacks
 import com.showcase.desertant.ui.common.dateTime
 import com.showcase.desertant.ui.hand.Doodle
 import com.showcase.desertant.ui.hand.DoodleButton
@@ -202,8 +203,9 @@ private fun TalkRow(meeting: MeetingEntity, people: List<ProfileEntity>, highlig
                     snippet(meeting.transcriptText, highlight)?.let { Meta("…$it…", Modifier.padding(top = 4.dp), color = burrow.ink, maxLines = 2) }
                 }
             }
-            MeetingStatus.FAILED -> IndicSpeech.languageFor(meeting.language)?.let { lang ->
-                Meta("in ${lang.name} — open it to get ${lang.name} and write its notes", Modifier.padding(top = 4.dp), color = burrow.ink)
+            MeetingStatus.FAILED -> SpeechPacks.route(meeting.language)?.takeIf { meeting.languageSupported == false }?.let { _ ->
+                val name = languageName(meeting.language).substringBefore(" (")
+                Meta("in $name — open it to get $name and write its notes", Modifier.padding(top = 4.dp), color = burrow.ink)
             } ?: Meta("couldn't finish — open it to try again", Modifier.padding(top = 4.dp), color = burrow.redPen)
             else -> Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 1.5.dp, color = burrow.ink)

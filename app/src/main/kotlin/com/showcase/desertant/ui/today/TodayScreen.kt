@@ -23,12 +23,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.showcase.desertant.app
+import com.showcase.desertant.core.languageName
 import com.showcase.desertant.data.MeetingStatus
 import com.showcase.desertant.meetings.RecorderService
 import com.showcase.desertant.meetings.RecorderState
 import com.showcase.desertant.photos.PhotoScanWorker
 import com.showcase.desertant.privacy.LedgerEntry
-import com.showcase.desertant.speech.IndicSpeech
+import com.showcase.desertant.speech.SpeechPacks
 import com.showcase.desertant.ui.common.formatBytes
 import com.showcase.desertant.ui.hand.Body
 import com.showcase.desertant.ui.hand.Doodle
@@ -122,7 +123,9 @@ fun TodayScreen(open: (String) -> Unit) {
                 MeetingStatus.QUEUED, MeetingStatus.PROCESSING -> Door("${m.title} — writing notes…", { open("meeting/${m.id}") }, meta = m.progress)
                 MeetingStatus.FAILED -> Door(
                     "${m.title} — needs you", { open("meeting/${m.id}") },
-                    meta = IndicSpeech.languageFor(m.language)?.let { "it's in ${it.name}: get ${it.name} to write its notes" } ?: "the notes couldn't be written; open it to try again",
+                    meta = SpeechPacks.route(m.language)?.takeIf { m.languageSupported == false }
+                        ?.let { languageName(m.language).substringBefore(" (").let { n -> "it's in $n: get $n to write its notes" } }
+                        ?: "the notes couldn't be written; open it to try again",
                 )
                 MeetingStatus.RECORDING -> Unit
             }

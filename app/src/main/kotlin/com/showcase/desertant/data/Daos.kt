@@ -76,6 +76,9 @@ interface MeetingDao {
     @Query("UPDATE meetings SET status = :status, progress = :progress, error = :error WHERE id = :id")
     suspend fun setStatus(id: Long, status: MeetingStatus, progress: String?, error: String? = null)
 
+    @Query("UPDATE meetings SET language = :language, languageChosen = 1 WHERE id = :id")
+    suspend fun chooseLanguage(id: Long, language: String)
+
     @Query("UPDATE meetings SET title = :title, titleEdited = 1 WHERE id = :id")
     suspend fun rename(id: Long, title: String)
 

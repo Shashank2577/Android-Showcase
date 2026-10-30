@@ -50,7 +50,7 @@ import com.showcase.desertant.ui.hand.PillButton
 import com.showcase.desertant.ui.hand.SectionHead
 import com.showcase.desertant.ui.hand.SwitchRow
 import com.showcase.desertant.ui.photos.photoPermissions
-import com.showcase.desertant.ui.settings.IndicLanguages
+import com.showcase.desertant.ui.settings.SpeechPackList
 import com.showcase.desertant.ui.theme.Hand
 import com.showcase.desertant.ui.theme.burrow
 
@@ -201,8 +201,8 @@ fun AskFirstScreen(onBack: () -> Unit, onDone: () -> Unit) {
             else -> PillButton(if (ready == 0) "download the models" else "download the rest", { app.hub.downloadInBackground(*SETUP_MODELS.toTypedArray()) }, leading = Doodle.PLUS)
         }
         Spacer(Modifier.height(18.dp))
-        SectionHead("talks in Hindi?", note = "optional")
-        IndicLanguages()
+        SectionHead("talks in Indian languages?", note = "optional")
+        SpeechPackList(compact = true)
         Spacer(Modifier.height(8.dp))
         SwitchRow("then never go online", offlineAfter, { offlineAfter = it }, body = "Once the models are here, Burrow cuts its own network for good. You can undo this on the privacy page.")
     }

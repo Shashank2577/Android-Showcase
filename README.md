@@ -9,7 +9,7 @@ Burrow is an Android app that handles six everyday jobs end to end, using small 
 | Tidy: keep the best shot of each moment, let the rest go | photos | Eye |
 | Private sweep and vault: IDs, cards, medical and intimate photos taken out of the gallery and encrypted | photos → private things | Eye, then Moderator to confirm intimate photos |
 | Share safely: check a photo before it leaves | Android share sheet → *Check with Burrow* | Eye, Moderator, plus the photo's EXIF data |
-| Talks: record a conversation and get notes, who spoke when, and follow-ups | talks | Clear, Ear, Voz, Who, Gist, Redact; Hindi via AI4Bharat IndicConformer |
+| Talks: record a conversation and get notes, who spoke when, and follow-ups | talks | Clear, Ear, Voz, Who, Gist, Redact; 22 Indian languages via AI4Bharat IndicConformer, others via Meta Omnilingual |
 | People: name a voice once and Burrow suggests that person afterwards | people | Who, plus Burrow's own voice signature |
 | Mask: swap secrets for placeholders before text goes to an AI, then put them back in the reply | today → mask, any app's text-selection menu → *Mask with Burrow* | Redact, Tongue |
 
@@ -67,14 +67,19 @@ During the photo scan, Eye flags IDs and bank cards, receipts, medical photos an
 - The vault locks as soon as you leave Burrow, and it forgets its decrypted thumbnails when it does.
 - You can put any photo back in the gallery (*Pictures/Burrow*), or delete it for good.
 
-## Talks in Hindi
+## Talks in Indian and other languages
 
-Ear identifies the spoken language of each talk. Voz covers 25 European languages; when Ear hears **Hindi**, Burrow transcribes it with **AI4Bharat's IndicConformer** instead, running on the phone with ONNX Runtime:
+Ear identifies the spoken language of each talk, and you can also set it by hand with the "language ▾" button on a talk. Burrow then picks the model that writes it:
 
-- **The model:** a community int8, CTC-only sherpa-onnx export of IndicConformer for Hindi ([`ngiftsun/indicconformer-hi-int8-sherpa`](https://huggingface.co/ngiftsun/indicconformer-hi-int8-sherpa), derived from [`ai4bharat/indic-conformer-600m-multilingual`](https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual), MIT licence). It's about 140 MB and is downloaded only when you ask, from *privacy → the models & languages*, from onboarding, or from a Hindi talk's page.
-- **How it runs:** 80-band log-mel features computed NeMo-style in Kotlin, the audio fed in roughly 20-second pieces cut at pauses, then greedy CTC decoding into words with timings. Diarization, people and the transcript work as for any talk. Topics and follow-ups are skipped for now, because Gist and the follow-up phrases are tuned for European languages.
-- **Without the model:** a Hindi talk stops with a clear "download Hindi" step, instead of producing a garbled transcript.
-- **More languages:** add another IndicConformer language with one more entry in `speech/IndicSpeech.kt`.
+| Language | Model (on the phone) | Download |
+| --- | --- | --- |
+| Voz's 25 European languages | Voz | built in |
+| **All 22 scheduled Indian languages**: Hindi, Bengali, Marathi, Telugu, Tamil, Gujarati, Urdu, Kannada, Odia, Malayalam, Punjabi, Assamese, Maithili, Santali, Kashmiri, Nepali, Sindhi, Konkani, Dogri, Manipuri, Bodo, Sanskrit | AI4Bharat **IndicConformer** (MIT), int8, run with ONNX Runtime | about 190 MB per language |
+| Every other language (1,600+) | Meta **Omnilingual ASR** 300M CTC (Apache-2.0), int8 | about 350 MB, once |
+
+These were chosen by measurement, not reputation. On 60 FLEURS test clips per language, IndicConformer made about a third of Omnilingual's errors on Hindi (11.8% vs 33% WER), and far fewer on Tamil and Bengali. Burrow's own Kotlin pipeline matches the reference implementation. The method and numbers are in [`tools/asr-eval`](tools/asr-eval/README.md).
+
+Packs download only when you ask (from onboarding, *privacy → the models & languages*, or a talk that needs one), and never while "never go online" is on. A talk in a language whose pack isn't on the phone stops with a one-tap download, instead of a garbled transcript. Topics and follow-ups are skipped for these languages for now, because Gist and the follow-up phrases are tuned for European languages. The transcript, speakers and people all work as normal.
 
 ## Share safely
 

@@ -66,6 +66,8 @@ data class MeetingEntity(
     val titleEdited: Boolean = false,
     /** Where an imported recording came from, so it isn't imported twice. */
     val sourceKey: String? = null,
+    /** The user set [language] by hand; processing uses it instead of asking Ear. */
+    val languageChosen: Boolean = false,
 )
 
 /** One diarized voice in one meeting, optionally linked to a person. */

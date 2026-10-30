@@ -30,7 +30,6 @@ import com.showcase.desertant.BuildConfig
 import com.showcase.desertant.app
 import com.showcase.desertant.core.ModelKind
 import com.showcase.desertant.core.ModelStatus
-import com.showcase.desertant.speech.IndicSpeech
 import com.showcase.desertant.ui.components.LocalModelHub
 import com.showcase.desertant.ui.hand.Body
 import com.showcase.desertant.ui.hand.Door
@@ -117,8 +116,8 @@ fun SettingsScreen(onBack: () -> Unit, openLab: () -> Unit) {
         }
 
         Spacer(Modifier.height(18.dp))
-        SectionHead("extra languages")
-        IndicLanguages()
+        SectionHead("languages", note = "for talks")
+        SpeechPackList()
 
         Spacer(Modifier.height(18.dp))
         Door("the model lab", openLab, meta = "try each model on its own, outside Burrow's jobs")
@@ -135,44 +134,11 @@ fun SettingsScreen(onBack: () -> Unit, openLab: () -> Unit) {
 
         Spacer(Modifier.height(18.dp))
         SectionHead("about")
-        Meta("Models by Desert Ant Labs, under the Desert Ant Labs Source-Available License. Hindi speech by AI4Bharat's IndicConformer (MIT).")
+        Meta("Models by Desert Ant Labs, under the Desert Ant Labs Source-Available License. Indian-language speech: AI4Bharat's IndicConformer (MIT), exported for phones by the sherpa-onnx community (Apache-2.0). Other languages: Meta's Omnilingual ASR (Apache-2.0).")
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             HandLink("desertant.com", { open(context, "https://desertant.com") })
             HandLink("license", { open(context, "https://license.desertant.com/") })
             HandLink("ai4bharat", { open(context, "https://ai4bharat.iitm.ac.in/") })
-        }
-    }
-}
-
-/** Speech models beyond Voz's 25 languages, downloaded only when asked. */
-@Composable
-fun IndicLanguages() {
-    val context = LocalContext.current
-    val app = context.app
-    val neverOnline by app.privacy.neverOnline.collectAsState()
-    val states by IndicSpeech.state.collectAsState()
-    Meta("Voz covers 25 European languages. When Ear hears one of these instead, Burrow uses AI4Bharat's IndicConformer, run on the phone.")
-    IndicSpeech.LANGUAGES.forEach { lang ->
-        val st = states[lang.code] ?: IndicSpeech.State.Unknown
-        Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("${lang.name} · ${lang.native}", style = Hand.label, color = burrow.ink)
-                Meta(
-                    when (st) {
-                        IndicSpeech.State.Ready -> "on the phone · talks in ${lang.name} get notes"
-                        is IndicSpeech.State.Downloading -> "downloading… ${st.percent}%"
-                        is IndicSpeech.State.Failed -> "didn't download: ${st.message}"
-                        else -> "not downloaded · about ${lang.sizeMb} MB"
-                    },
-                    color = if (st is IndicSpeech.State.Failed) burrow.redPen else burrow.pencil,
-                )
-            }
-            when {
-                st == IndicSpeech.State.Ready -> PillButton("remove", { IndicSpeech.remove(context, lang.code) })
-                st is IndicSpeech.State.Downloading -> Unit
-                neverOnline -> Meta("network off")
-                else -> PillButton("download", { IndicSpeech.download(context, lang.code) })
-            }
         }
     }
 }

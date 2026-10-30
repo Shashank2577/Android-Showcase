@@ -6,8 +6,9 @@ import java.io.File
 data class TimedWord(val text: String, val start: Double, val end: Double)
 
 /**
- * Greedy CTC decoding of SentencePiece tokens into timed words. Tokens that
- * start with "▁" begin a new word; blanks and repeats are dropped.
+ * Greedy CTC decoding into timed words. SentencePiece tokens that start with
+ * "▁" begin a new word, and so does a space or "|" token (character models);
+ * blanks and repeats are dropped.
  */
 class CtcDecoder(private val tokens: List<String>, private val blank: Int) {
 
@@ -32,14 +33,19 @@ class CtcDecoder(private val tokens: List<String>, private val blank: Int) {
             for (i in 1 until scores.size) if (scores[i] > scores[best]) best = i
             if (best != blank && best != previous && best < tokens.size) {
                 val piece = tokens[best]
-                if (piece.startsWith(WORD_START)) {
-                    flush()
-                    current.append(piece.removePrefix(WORD_START))
-                } else if (!piece.startsWith("<")) {
-                    current.append(piece)
+                when {
+                    // Character models (Omnilingual) mark word breaks with a space or "|" token.
+                    piece.isBlank() || piece == "|" -> flush()
+                    piece.startsWith(WORD_START) -> {
+                        flush()
+                        current.append(piece.removePrefix(WORD_START))
+                    }
+                    !piece.startsWith("<") -> current.append(piece)
                 }
-                if (wordStart < 0) wordStart = t
-                wordEnd = t
+                if (current.isNotEmpty()) {
+                    if (wordStart < 0) wordStart = t
+                    wordEnd = t
+                }
             }
             previous = best
         }
@@ -54,19 +60,18 @@ class CtcDecoder(private val tokens: List<String>, private val blank: Int) {
          * Reads a sherpa-onnx style `tokens.txt` ("<piece> <id>" per line). The
          * blank is the `<blk>` entry, or else the last id.
          */
-        fun fromTokensFile(file: File, vocabSize: Int? = null): CtcDecoder {
+        fun fromTokensFile(file: File, vocabSize: Int? = null, blankId: Int? = null): CtcDecoder {
             val byId = HashMap<Int, String>()
             file.readLines().forEach { line ->
-                val trimmed = line.trimEnd()
-                if (trimmed.isEmpty()) return@forEach
-                val cut = trimmed.lastIndexOf(' ')
-                if (cut <= 0) return@forEach
-                val id = trimmed.substring(cut + 1).toIntOrNull() ?: return@forEach
-                byId[id] = trimmed.substring(0, cut)
+                // The piece itself may be a space (" 4"), so only the id is trimmed.
+                val cut = line.trimEnd().lastIndexOf(' ')
+                if (cut < 0) return@forEach
+                val id = line.substring(cut + 1).trim().toIntOrNull() ?: return@forEach
+                byId[id] = line.substring(0, cut)
             }
             val size = maxOf(byId.keys.maxOrNull()?.plus(1) ?: 0, vocabSize ?: 0)
             val tokens = List(size) { byId[it] ?: "<unk>" }
-            val blank = byId.entries.firstOrNull { it.value == "<blk>" || it.value == "<blank>" }?.key ?: (size - 1)
+            val blank = blankId ?: byId.entries.firstOrNull { it.value == "<blk>" || it.value == "<blank>" }?.key ?: (size - 1)
             return CtcDecoder(tokens, blank)
         }
     }

@@ -62,7 +62,7 @@ import com.showcase.desertant.data.ProfileEntity
 import com.showcase.desertant.data.Utterance
 import com.showcase.desertant.meetings.MeetingWorker
 import com.showcase.desertant.people.People
-import com.showcase.desertant.speech.IndicSpeech
+import com.showcase.desertant.speech.SpeechPacks
 import com.showcase.desertant.ui.common.dateTime
 import com.showcase.desertant.ui.hand.Body
 import com.showcase.desertant.ui.hand.ConfirmSheet
@@ -72,6 +72,7 @@ import com.showcase.desertant.ui.hand.DoodleIcon
 import com.showcase.desertant.ui.hand.Gutter
 import com.showcase.desertant.ui.hand.HandDivider
 import com.showcase.desertant.ui.hand.HandField
+import com.showcase.desertant.ui.hand.HandLink
 import com.showcase.desertant.ui.hand.HandSheet
 import com.showcase.desertant.ui.hand.InkButton
 import com.showcase.desertant.ui.hand.MarkedText
@@ -80,7 +81,8 @@ import com.showcase.desertant.ui.hand.Meta
 import com.showcase.desertant.ui.hand.PillButton
 import com.showcase.desertant.ui.hand.SectionHead
 import com.showcase.desertant.ui.hand.marker
-import com.showcase.desertant.ui.settings.IndicLanguages
+import com.showcase.desertant.ui.settings.LanguageSheet
+import com.showcase.desertant.ui.settings.PackRow
 import com.showcase.desertant.ui.shell.LocalWideLayout
 import com.showcase.desertant.ui.theme.Hand
 import com.showcase.desertant.ui.theme.burrow
@@ -106,6 +108,7 @@ fun MeetingDetailContent(id: Long, open: (String) -> Unit, embedded: Boolean, on
     var sharing by remember { mutableStateOf(false) }
     var assigning by remember { mutableStateOf<MeetingSpeakerEntity?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var choosingLanguage by remember { mutableStateOf(false) }
 
     val m = meeting ?: return
     fun retry() = scope.launch {
@@ -127,10 +130,19 @@ fun MeetingDetailContent(id: Long, open: (String) -> Unit, embedded: Boolean, on
                 }
             }
         }
-        if (m.status != MeetingStatus.READY) ProcessingState(m, ::retry)
-        else Notes(m, speakers, profiles, onRename = { renaming = true }, onAssign = { assigning = it }, open = open)
+        if (m.status != MeetingStatus.READY) ProcessingState(m, ::retry) { choosingLanguage = true }
+        else Notes(m, speakers, profiles, onRename = { renaming = true }, onAssign = { assigning = it }, open = open, onChooseLanguage = { choosingLanguage = true })
     }
 
+    if (choosingLanguage) {
+        LanguageSheet(m.language, onDismiss = { choosingLanguage = false }) { code ->
+            choosingLanguage = false
+            scope.launch {
+                db.meetings().chooseLanguage(id, code)
+                retry()
+            }
+        }
+    }
     if (renaming) RenameSheet(m.title, onDismiss = { renaming = false }) { t -> scope.launch { db.meetings().rename(id, t) }; renaming = false }
     if (sharing) ShareDialog(m, speakers, profiles) { sharing = false }
     assigning?.let { s -> AssignSpeakerDialog(s, profiles, onDismiss = { assigning = null }) }
@@ -154,28 +166,31 @@ fun MeetingDetailContent(id: Long, open: (String) -> Unit, embedded: Boolean, on
 }
 
 @Composable
-private fun ProcessingState(m: MeetingEntity, onRetry: () -> Unit) {
+private fun ProcessingState(m: MeetingEntity, onRetry: () -> Unit, onChooseLanguage: () -> Unit) {
     Column(
         Modifier.fillMaxSize().padding(horizontal = Gutter, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Text(m.title, style = Hand.headline, color = burrow.ink)
-        val indic = IndicSpeech.languageFor(m.language)
         val context = LocalContext.current
-        val languages by IndicSpeech.state.collectAsState()
-        if (m.status == MeetingStatus.FAILED && indic != null) {
+        val packs by SpeechPacks.state.collectAsState()
+        val pack = SpeechPacks.route(m.language)?.takeIf { m.languageSupported == false }
+        if (m.status == MeetingStatus.FAILED && pack != null) {
             // A talk in a language Voz doesn't speak: one download away from its notes.
-            val ready = languages[indic.code] == IndicSpeech.State.Ready || IndicSpeech.isReady(context, indic.code)
+            val name = languageName(m.language).substringBefore(" (")
+            val ready = packs[pack.code] == SpeechPacks.State.Ready || SpeechPacks.isReady(context, pack)
             Body(
-                if (ready) "${indic.name} is on the phone now. Write the notes." else "This talk is in ${indic.name} (${indic.native}). Burrow needs the ${indic.name} speech model once to write its notes.",
+                if (ready) "The $name speech pack is on the phone now." else "This talk is in $name. Burrow needs the speech pack for it, once, to write the notes.",
                 color = burrow.ink,
             )
-            if (ready) InkButton("write the notes", onRetry, Modifier.fillMaxWidth()) else IndicLanguages()
+            if (ready) InkButton("write the notes", onRetry, Modifier.fillMaxWidth()) else PackRow(pack)
+            HandLink("not $name? choose the language", onChooseLanguage)
         } else if (m.status == MeetingStatus.FAILED) {
             DoodleIcon(Doodle.CROSS, null, size = 40.dp, color = burrow.redPen, stroke = 3.dp)
             Body(m.error ?: "The notes couldn't be written.", color = burrow.redPen)
             InkButton("try again", onRetry)
+            HandLink("wrong language? choose it", onChooseLanguage)
         } else {
             CircularProgressIndicator(color = burrow.ink, strokeWidth = 2.dp)
             Text((m.progress ?: "waiting to be written up").lowercase(), style = Hand.door, color = burrow.ink)
@@ -192,6 +207,7 @@ private fun Notes(
     onRename: () -> Unit,
     onAssign: (MeetingSpeakerEntity) -> Unit,
     open: (String) -> Unit,
+    onChooseLanguage: () -> Unit,
 ) {
     val utterances = remember(m.utterancesJson) { decodeUtterances(m.utterancesJson) }
     val topics = remember(m.topicsJson) { decodeTopics(m.topicsJson) }
@@ -213,10 +229,13 @@ private fun Notes(
                 DoodleButton(Doodle.PEN, "Rename", onRename, size = 22.dp)
             }
             Meta(
-                listOfNotNull(dateTime(context, m.createdAt), formatClock(m.durationSec), m.language?.let { languageName(it) }).joinToString(" · "),
+                listOfNotNull(dateTime(context, m.createdAt), formatClock(m.durationSec)).joinToString(" · "),
                 Modifier.padding(top = 2.dp),
             )
-            if (m.languageSupported == false) Meta("transcription isn't trained on this language", color = burrow.redPen)
+            PillButton(
+                "${m.language?.let { languageName(it).substringBefore(" (").lowercase() } ?: "language"} ▾",
+                onChooseLanguage, Modifier.padding(top = 8.dp),
+            )
             if (topics.isNotEmpty()) {
                 val words = topics.take(4).joinToString("  ·  ") { it.name.lowercase() }
                 MarkedText(words, Modifier.padding(top = 10.dp), mark = topics.first().name.lowercase(), style = Hand.label)

@@ -1,14 +1,14 @@
 package com.showcase.desertant.meetings
 
-import android.content.Context
-import android.net.Uri
 import ai.desertant.voz.Transcription
 import ai.desertant.voz.Word
 import ai.desertant.who.Turn
+import android.content.Context
+import android.net.Uri
 import com.showcase.desertant.app
 import com.showcase.desertant.audio.AudioDecoder
 import com.showcase.desertant.core.ModelKind
-import com.showcase.desertant.core.VOZ_LANGUAGES
+import com.showcase.desertant.core.languageName
 import com.showcase.desertant.data.MeetingSpeakerEntity
 import com.showcase.desertant.data.MeetingStatus
 import com.showcase.desertant.data.Moment
@@ -19,13 +19,13 @@ import com.showcase.desertant.data.VoiceSignature
 import com.showcase.desertant.people.ProfileMatcher
 import com.showcase.desertant.people.VoiceSignatures
 import com.showcase.desertant.privacy.LedgerEntry
-import com.showcase.desertant.speech.IndicSpeech
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.showcase.desertant.speech.SpeechPacks
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Turns a recording into a finished meeting: language, transcript, speakers,
@@ -53,8 +53,8 @@ class MeetingProcessor(private val context: Context) {
         // Work through the recording ~10 minutes at a time, cut at pauses, so memory
         // stays the same for a 5-minute call and a 2-hour meeting. Speakers found in
         // each window are linked to the same person across windows by voice.
-        var language: ai.desertant.ear.Detection? = null
-        var indic: IndicSpeech.Language? = null
+        var language: String? = null
+        var pack: SpeechPacks.Pack? = null
         val words = ArrayList<Word>()
         val text = StringBuilder()
         val turns = ArrayList<Turn>()
@@ -74,29 +74,32 @@ class MeetingProcessor(private val context: Context) {
             if (piece.size < RATE / 2) break
 
             if (language == null) {
-                step("Detecting the language…")
-                // Ear looks at up to three 30 s windows of the start.
-                language = hub.ear.identify(piece.copyOfRange(0, minOf(piece.size, RATE * 240)), rate)
-                indic = IndicSpeech.languageFor(language.language)?.takeIf { language.language !in VOZ_LANGUAGES }
-                indic?.let { lang ->
-                    if (!IndicSpeech.isReady(context, lang.code)) {
-                        db.meetings().get(meetingId)?.let { db.meetings().update(it.copy(language = lang.code, languageSupported = false)) }
+                // The user's own choice wins; otherwise Ear listens to up to three 30 s windows of the start.
+                language = meeting.language?.takeIf { meeting.languageChosen } ?: run {
+                    step("Detecting the language…")
+                    hub.ear.identify(piece.copyOfRange(0, minOf(piece.size, RATE * 240)), rate).language
+                }
+                pack = SpeechPacks.route(language)
+                pack?.let { p ->
+                    if (!SpeechPacks.isReady(context, p)) {
+                        db.meetings().get(meetingId)?.let { db.meetings().update(it.copy(language = language, languageSupported = false)) }
+                        val name = if (p.kind == SpeechPacks.Kind.UNIVERSAL) languageName(language) else p.name
                         throw IllegalStateException(
-                            "This talk is in ${lang.name}. Download ${lang.name} (about ${lang.sizeMb} MB, once) and Burrow can write its notes.",
+                            "This talk is in $name. Download the ${p.name.lowercase()} speech pack (about ${p.sizeMb} MB, once) and Burrow can write its notes.",
                         )
                     }
                 }
             }
 
             step("Transcribing$label…")
-            val lang = indic
-            if (lang != null) {
-                // Voz doesn't speak this language: AI4Bharat's IndicConformer does, on the phone.
-                val said = IndicSpeech.transcribe(context, lang.code, piece)
+            val extra = pack
+            if (extra != null) {
+                // Voz doesn't speak this language: an IndicConformer or Omnilingual pack does, on the phone.
+                val said = SpeechPacks.transcribe(context, extra, piece)
                 said.forEach { words += Word(it.text, it.start + start, it.end + start) }
                 if (said.isNotEmpty()) text.append(said.joinToString(" ") { it.text }).append(' ')
             } else {
-                // Only now: a Hindi talk never needs Voz on the phone.
+                // Only now: a talk in another language never needs Voz on the phone.
                 hub.ensureReady(ModelKind.VOZ)
                 val part = hub.voz.transcribe(piece, rate)
                 part.words.forEach { words += Word(it.text, it.start + start, it.end + start) }
@@ -111,11 +114,10 @@ class MeetingProcessor(private val context: Context) {
             start += piece.size.toDouble() / RATE
             if (last) break
         }
-        IndicSpeech.closeRecognizer()
-        val lang = indic?.code ?: language?.language
-        val supported = lang == null || lang in VOZ_LANGUAGES || indic != null
+        SpeechPacks.closeRecognizer()
+        val lang = language
         // Topics and follow-ups are tuned for the languages Voz covers; skip them rather than guess.
-        val european = indic == null
+        val european = pack == null
         val transcript = Transcription(text.toString().trim(), words, start)
         val durationSec = start
         val speakerCount = voices.size
@@ -167,7 +169,7 @@ class MeetingProcessor(private val context: Context) {
             )
         }
 
-        val title = if (meeting.titleEdited) meeting.title else autoTitle(topics, meeting.createdAt, indic?.name)
+        val title = if (meeting.titleEdited) meeting.title else autoTitle(topics, meeting.createdAt, lang?.takeIf { pack != null }?.let { languageName(it).substringBefore(" (") })
         db.speakers().deleteForMeeting(meetingId)
         db.speakers().insert(speakers)
         db.meetings().update(
@@ -178,7 +180,8 @@ class MeetingProcessor(private val context: Context) {
                 progress = null,
                 error = null,
                 language = lang,
-                languageSupported = supported,
+                // Every language that reaches this point had a model that speaks it.
+                languageSupported = true,
                 transcriptText = fullText,
                 utterancesJson = StoreJson.encodeToString(UTTERANCES, utterances),
                 topicsJson = StoreJson.encodeToString(TOPICS, topics),
