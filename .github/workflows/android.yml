@@ -75,6 +75,6 @@ jobs:
           body: |
             Test build for arm64 Android phones (Android 11+).
 
-            **Install:** download the APK on your phone, open it and allow installs from your browser. Signed with the vendor test key, like PhoneDots: later builds update in place, and the two apps share downloaded models. Builds from before 3.4 used a different key: uninstall that one once.
+            **Install:** download the APK on your phone, open it and allow installs from your browser. Signed with the vendor test key, like PhoneDots: later builds update in place, and the two apps share downloaded models. Builds before 3.8 used a different key: uninstall that one once.
 
             **Report a problem:** settings → logs → copy all, and paste it into the report.
