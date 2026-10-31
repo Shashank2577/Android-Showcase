@@ -43,7 +43,27 @@ class People(context: Context) {
     suspend fun create(name: String, isMe: Boolean): Long {
         val existing = db.profiles().allNow()
         if (isMe) existing.filter { it.isMe }.forEach { db.profiles().update(it.copy(isMe = false)) }
-        return db.profiles().insert(ProfileEntity(name = name.trim(), colorIndex = existing.size, isMe = isMe))
+        val id = db.profiles().insert(ProfileEntity(name = name.trim(), colorIndex = existing.size, isMe = isMe))
+        CallLinks.relinkAll(db)
+        return id
+    }
+
+    /**
+     * Link a person to the contact the user picked: its number and name let
+     * Burrow put their call recordings and chats on their page.
+     */
+    suspend fun linkContact(profileId: Long, picked: Contacts.Picked) {
+        val p = db.profiles().get(profileId) ?: return
+        val linked = Contacts.withAlias(Contacts.withNumber(p, picked.number), picked.name).copy(contactUri = picked.contactUri ?: p.contactUri)
+        db.profiles().update(linked)
+        CallLinks.relinkAll(db)
+    }
+
+    suspend fun unlinkContact(profileId: Long) {
+        val p = db.profiles().get(profileId) ?: return
+        db.profiles().update(p.copy(contactUri = null, phones = ""))
+        db.meetings().unlinkCalls(profileId)
+        CallLinks.relinkAll(db)
     }
 
     /** Teach a voice from a dedicated sample (16 kHz mono). Returns false if too little speech was heard. */
@@ -55,12 +75,15 @@ class People(context: Context) {
     }
 
     suspend fun rename(profileId: Long, name: String) {
-        db.profiles().get(profileId)?.let { db.profiles().update(it.copy(name = name.trim())) }
+        db.profiles().get(profileId)?.let { db.profiles().update(Contacts.withAlias(it, it.name).copy(name = name.trim())) }
+        CallLinks.relinkAll(db)
     }
 
-    /** Forget this person: their learned voice goes, and every talk they were in is unlinked. */
+    /** Forget this person: their learned voice goes, and every talk, call and chat they were in is unlinked. */
     suspend fun delete(profileId: Long) {
         db.profiles().delete(profileId)
+        db.meetings().unlinkCalls(profileId)
+        db.chats().unlinkPerson(profileId)
         refreshSuggestions()
     }
 

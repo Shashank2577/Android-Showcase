@@ -125,6 +125,17 @@ class AskAgentTest {
     }
 
     @Test
+    fun searchesSharedChatsByPersonAndWords() = runBlocking {
+        val r = tools.run("search_messages", mapOf("person" to "Priya", "query" to "book"))
+        assertTrue(r.json, r.json.contains("I'll book it next week") && r.json.contains("Priya Shah"))
+        assertFalse("the user's own messages aren't Priya's", r.json.contains("Looks good"))
+        val p = tools.run("find_person", mapOf("name" to "Priya"))
+        assertTrue(p.json, p.json.contains("\"recorded_calls\":1") && p.json.contains("\"chat_messages_from_them\":4"))
+        val calls = tools.run("search_talks", mapOf("person" to "Priya"))
+        assertTrue("calls linked by number count as talks with her", calls.json.contains("call with Priya"))
+    }
+
+    @Test
     fun specsAreValidJson() {
         tools.specs.forEach { s ->
             val o = Json.parseToJsonElement(s.json).jsonObject

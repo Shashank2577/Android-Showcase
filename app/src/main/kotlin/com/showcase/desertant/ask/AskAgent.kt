@@ -43,6 +43,10 @@ sealed interface AskSource {
     data class Photos(val query: String, val count: Int, val uris: List<String>) : AskSource {
         override val key get() = "photos/$query"
     }
+
+    data class Chat(val id: Long, val title: String, val at: Long, val quote: String) : AskSource {
+        override val key get() = "chat/$id/$at"
+    }
 }
 
 /** Result of running one tool. [json] goes back to the model; the rest is for the screen. */
@@ -155,6 +159,7 @@ class AskAgent(private val tools: ToolBox, private val maxRounds: Int = 5) {
                 is AskSource.Talk -> if (s.quote != null) overlap(s.quote.lowercase(), a) >= 0.5 else s.title.lowercase() in a
                 is AskSource.Person -> s.name.lowercase().substringBefore(' ') in a
                 is AskSource.Photos -> true
+                is AskSource.Chat -> overlap(s.quote.lowercase(), a) >= 0.5
             }
             val named = all.filter(::mentioned)
             // A quote that's cited makes its bare talk redundant.

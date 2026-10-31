@@ -89,6 +89,29 @@
             </intent-filter>
         </activity>
 
+        <!-- Chats: only ones the user exports and shares here (WhatsApp → Export chat).
+             Burrow never reads messages from other apps. -->
+        <activity
+            android:name=".ui.chats.ChatImportActivity"
+            android:exported="true"
+            android:label="@string/chat_import_label"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|density|uiMode">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="application/zip" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="application/zip" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".meetings.RecorderService"
             android:exported="false"

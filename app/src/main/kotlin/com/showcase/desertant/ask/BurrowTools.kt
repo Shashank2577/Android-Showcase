@@ -6,6 +6,7 @@ import com.showcase.desertant.data.MeetingEntity
 import com.showcase.desertant.data.MeetingSpeakerEntity
 import com.showcase.desertant.data.MeetingStatus
 import com.showcase.desertant.data.ProfileEntity
+import com.showcase.desertant.people.Contacts
 import com.showcase.desertant.ui.meetings.decodeMoments
 import com.showcase.desertant.ui.meetings.decodeTopics
 import com.showcase.desertant.ui.meetings.decodeUtterances
@@ -68,6 +69,15 @@ class BurrowTools(
             ),
         ),
         ToolSpec(
+            "search_messages", "search chats",
+            spec(
+                "search_messages", "Search chats the user shared into Burrow (like WhatsApp exports). Returns matching messages with who sent them and when.",
+                "query" to "string" to "Words to look for in the messages. Leave out to get the latest messages.",
+                "person" to "string" to "Only messages this person sent.",
+                "days" to "integer" to "Only messages from the last this many days.",
+            ),
+        ),
+        ToolSpec(
             "find_photos", "search photos",
             spec(
                 "find_photos", "Find photos on the phone by what is in them, like \"dog\", \"beach\", \"receipt\" or \"smiling\".",
@@ -106,6 +116,7 @@ class BurrowTools(
         "search_talks" -> searchTalks(args.str("query"), args.str("person"), args.long("days"))
         "follow_ups" -> followUps(args.str("person"), args.long("talk_id"), args.long("days"))
         "talk_details" -> talkDetails(args.long("talk_id") ?: throw IllegalArgumentException("which talk?"))
+        "search_messages" -> searchMessages(args.str("query"), args.str("person"), args.long("days"))
         "find_photos" -> findPhotos(args.str("query") ?: throw IllegalArgumentException("photos of what?"))
         "rename_talk" -> renameTalk(args.long("talk_id") ?: throw IllegalArgumentException("which talk?"), args.str("title") ?: throw IllegalArgumentException("what title?"))
         "start_recording" -> ToolResult("""{"done":true,"note":"The recorder is open."}""", "recorder opened", openRoute = "record")
@@ -132,7 +143,7 @@ class BurrowTools(
     private fun Index.match(name: String): List<ProfileEntity> {
         val q = name.trim().lowercase()
         if (q in setOf("me", "i", "myself", "my")) return profiles.filter { it.isMe }
-        val exact = profiles.filter { it.name.lowercase() == q }
+        val exact = profiles.filter { it.name.lowercase() == q || Contacts.aliasesOf(it).any { a -> Contacts.plain(a) == Contacts.plain(q) } }
         if (exact.isNotEmpty()) return exact
         val words = q.split(' ').filter { it.isNotBlank() }
         return profiles.filter { p -> val n = p.name.lowercase().split(' '); words.all { w -> n.any { it.startsWith(w) } } }
@@ -145,9 +156,10 @@ class BurrowTools(
             val known = ix.profiles.joinToString(", ") { it.name }
             return ToolResult(obj("people" to JsonArray(emptyList()), "note" to "No one called $name. People Burrow knows: ${known.ifEmpty { "none yet" }}."), "no one called $name")
         }
+        val chatLinks = db.chats().allPeopleNow()
         val out = people.map { p ->
             val mine = ix.speakers.filter { it.profileId == p.id }
-            val talks = ix.talks.filter { t -> mine.any { it.meetingId == t.id } }
+            val talks = ix.talks.filter { t -> t.callProfileId == p.id || mine.any { it.meetingId == t.id } }
             val topics = mine.flatMap { decodeTopics(it.topicsJson) }.groupBy { it.name }
                 .entries.sortedByDescending { e -> e.value.sumOf { it.score } }.take(4).map { it.key.lowercase() }
             obj(
@@ -156,6 +168,9 @@ class BurrowTools(
                 "talks" to talks.size,
                 "last_talk" to talks.maxByOrNull { it.createdAt }?.let { "${it.title}, ${day(it.createdAt)}" },
                 "talks_about" to topics.joinToString(", ").ifEmpty { null },
+                "recorded_calls" to db.meetings().calls().count { it.callProfileId == p.id },
+                "chat_messages_from_them" to chatLinks.filter { it.profileId == p.id && !it.isMe }.sumOf { it.messages },
+                "phone_contact_linked" to (p.contactUri != null || p.phones.isNotEmpty()),
             )
         }
         val summary = people.joinToString(", ") { p -> "${p.name} · ${talks(ix.speakers.filter { it.profileId == p.id }.map { it.meetingId }.distinct().size)}" }
@@ -169,7 +184,7 @@ class BurrowTools(
         val since = days?.takeIf { it > 0 }?.let { now() - it * 86_400_000L }
         val talks = talks.filter { t ->
             (since == null || t.createdAt >= since) &&
-                (who == null || speakersOf(t.id).any { s -> who.any { it.id == s.profileId } })
+                (who == null || t.callProfileId in who.map { it.id } || speakersOf(t.id).any { s -> who.any { it.id == s.profileId } })
         }.sortedByDescending { it.createdAt }
         return talks to who
     }
@@ -259,6 +274,48 @@ class BurrowTools(
             "transcript_start" to JsonArray(lines.take(6).map { line(formatClock(it.start), ix.nameOf(id, it.speaker), it.text) }),
         )
         return result(out, "${t.title} · ${people.size} people", listOf(AskSource.Talk(t.id, t.title)))
+    }
+
+    // ---- chats ----
+
+    private suspend fun searchMessages(query: String?, person: String?, days: Long?): ToolResult {
+        val ix = index()
+        val who = person?.takeIf { it.isNotBlank() }?.let { ix.match(it) }
+        if (who != null && who.isEmpty()) return result(objOf("messages" to JsonArray(emptyList()), "note" to JsonPrimitive("No one called $person.")), "no one called $person")
+        val chats = db.chats().allNow().associateBy { it.id }
+        if (chats.isEmpty()) {
+            return result(objOf("messages" to JsonArray(emptyList()), "note" to JsonPrimitive("No chats yet. The user can add one: WhatsApp → chat → Export chat → Burrow.")), "no chats added yet")
+        }
+        val since = days?.takeIf { it > 0 }?.let { now() - it * 86_400_000L } ?: 0L
+        val links = db.chats().allPeopleNow()
+        val senders: Set<Pair<Long, String>>? = who?.let { ws -> links.filter { l -> ws.any { it.id == l.profileId } && !l.isMe }.map { it.chatId to it.sender }.toSet() }
+        val words = words(query)
+        val pool = when {
+            words.isNotEmpty() -> db.chats().searchAll(words.maxBy { it.length }, since, 400)
+            senders != null -> db.chats().recentIn(senders.map { it.first }.distinct(), since, 400)
+            else -> db.chats().recentIn(chats.keys.toList(), since, 20)
+        }
+        val hits = pool.filter { m ->
+            (senders == null || (m.chatId to m.sender) in senders) && words.all { it in m.text.lowercase() }
+        }.take(8)
+        fun nameOf(chatId: Long, sender: String): String {
+            val l = links.firstOrNull { it.chatId == chatId && it.sender == sender }
+            return when {
+                l?.isMe == true -> "the user"
+                l?.profileId != null -> ix.byId[l.profileId]?.name ?: sender
+                else -> sender
+            }
+        }
+        val out = hits.map { m ->
+            objOf(
+                "chat" to JsonPrimitive(chats[m.chatId]?.title ?: "chat"),
+                "date" to JsonPrimitive(day(m.at)),
+                "who" to JsonPrimitive(nameOf(m.chatId, m.sender)),
+                "text" to JsonPrimitive(m.text.take(240)),
+            )
+        }
+        val sources = hits.map { AskSource.Chat(it.chatId, chats[it.chatId]?.title ?: "chat", it.at, it.text.take(160)) }
+        return result(objOf("messages" to JsonArray(out)), if (hits.size == 1) "1 message" else "${hits.size} messages", sources)
     }
 
     // ---- photos ----

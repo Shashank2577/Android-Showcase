@@ -5,4 +5,5 @@
     <string name="share_check_label">Check with Burrow</string>
     <!-- Shown in every app's text-selection menu and the share sheet for text. -->
     <string name="mask_label">Mask with Burrow</string>
+    <string name="chat_import_label">Add chat to Burrow</string>
 </resources>

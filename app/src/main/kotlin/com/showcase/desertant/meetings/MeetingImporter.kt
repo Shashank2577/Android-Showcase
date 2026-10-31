@@ -9,6 +9,8 @@ import com.showcase.desertant.app
 import com.showcase.desertant.data.MeetingEntity
 import com.showcase.desertant.data.MeetingSource
 import com.showcase.desertant.data.MeetingStatus
+import com.showcase.desertant.people.CallLinks
+import com.showcase.desertant.people.Contacts
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -38,15 +40,21 @@ object MeetingImporter {
             val out = File(dir, "imp-${System.currentTimeMillis()}.$ext")
             resolver.openInputStream(uri)?.use { input -> out.outputStream().use { input.copyTo(it) } }
                 ?: error("Couldn't open that file.")
-            val id = context.app.db.meetings().insert(
+            val db = context.app.db
+            // A call recording's file name says who it was with ("Call recording Priya Shah_241030_181205").
+            val callWith = if (source == MeetingSource.CALL) CallLinks.whoFromFileName(display) else null
+            val callProfile = callWith?.let { Contacts.match(it, db.profiles().allNow()) }
+            val id = db.meetings().insert(
                 MeetingEntity(
-                    title = display.substringBeforeLast('.'),
+                    title = callWith?.let { "call with $it" } ?: display.substringBeforeLast('.'),
                     createdAt = createdAt ?: System.currentTimeMillis(),
                     audioPath = out.absolutePath,
                     source = source,
                     status = MeetingStatus.QUEUED,
                     progress = "Waiting to be processed",
                     sourceKey = uri.toString(),
+                    callWith = callWith,
+                    callProfileId = callProfile?.id,
                 ),
             )
             MeetingWorker.enqueue(context, id)

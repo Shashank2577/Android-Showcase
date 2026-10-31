@@ -2,7 +2,7 @@
 
 Burrow is an Android app that handles everyday jobs end to end, using small AI models that run **only on your phone**. These are jobs people usually hand to cloud apps. It's built on the [Desert Ant Labs](https://desertant.com) on-device models (`ai.desertant:*:4.2.1`), plus open speech models for Indian and other languages.
 
-The current version is **3.4**. It uses the *hand-drawn minimal* design system in [`design/burrow-a/theme`](design/burrow-a/theme/THEME.md), and is built around the product rethink in [`design/burrow-a/PRODUCT.md`](design/burrow-a/PRODUCT.md).
+The current version is **3.5**. It uses the *hand-drawn minimal* design system in [`design/burrow-a/theme`](design/burrow-a/theme/THEME.md), and is built around the product rethink in [`design/burrow-a/PRODUCT.md`](design/burrow-a/PRODUCT.md).
 
 **Contents:**
 - [Showcase](#showcase)
@@ -52,6 +52,12 @@ Every screenshot here is rendered from the real Compose code with sample data, b
 <td><img src="design/burrow-a/theme/shots/23-ask-confirm.png" width="200" alt="Ask confirm"><br><sub>ask: changes wait for you</sub></td>
 <td><img src="design/burrow-a/theme/shots/24-ask-answer.png" width="200" alt="Ask answer"><br><sub>ask: every step, every source</sub></td>
 </tr>
+<tr>
+<td><img src="design/burrow-a/theme/shots/16-person.png" width="200" alt="Person with contact"><br><sub>a person: contact, calls, chats</sub></td>
+<td><img src="design/burrow-a/theme/shots/25-chat.png" width="200" alt="Chat"><br><sub>a chat you shared</sub></td>
+<td><img src="design/burrow-a/theme/shots/26-chat-import.png" width="200" alt="Add a chat"><br><sub>add a chat: who's who</sub></td>
+<td><img src="design/burrow-a/theme/shots/dark-25-chat.png" width="200" alt="Chat, dark"><br><sub>dark: a chat</sub></td>
+</tr>
 </table>
 
 A clickable HTML prototype of the design (17 screens, 8 journeys) is in [`design/burrow-a/prototype`](design/burrow-a/prototype). On a Fold's inner screen, tablets and in landscape, lists and details sit side by side ([`15-fold-inner-talks.png`](design/burrow-a/theme/shots/15-fold-inner-talks.png)).
@@ -64,7 +70,7 @@ A clickable HTML prototype of the design (17 screens, 8 journeys) is in [`design
 | Private sweep and vault: IDs, cards, medical and intimate photos taken out of the gallery and encrypted | photos → private things | Eye, then Moderator to confirm intimate photos |
 | Share safely: check a photo before it leaves | Android share sheet → *Check with Burrow* | Eye, Moderator, plus the photo's EXIF data |
 | Talks: record a conversation and get notes, who spoke when, and follow-ups | talks | Clear, Ear, Voz, Who, Gist, Redact; 22 Indian languages via AI4Bharat IndicConformer, others via Meta Omnilingual |
-| People: name a voice once and Burrow suggests that person afterwards | people | Who, plus Burrow's own voice signature |
+| People: name a voice once and Burrow suggests that person afterwards; their contact, call recordings and the chats you share are on their page | people | Who, plus Burrow's own voice signature |
 | Mask: swap secrets for placeholders before text goes to an AI, then put them back in the reply | today → mask, any app's text-selection menu → *Mask with Burrow* | Redact, Tongue |
 | **Ask**: questions about your talks, people and photos, answered on the phone by a small model calling Burrow's own tools | today → *ask Burrow…* | Gemma 4 E2B (LiteRT-LM) |
 
@@ -133,6 +139,25 @@ Who tells speakers apart within one recording. Burrow links them across recordin
   - **what they talk about**: Gist topics rolled up across meetings, weighted to recent ones;
   - quotes in their own words, and links to every meeting.
 - The **voices to name** inbox collects unnamed speakers from recent meetings.
+
+**Contacts, calls and chats.** A person's page brings together everything about them, without Burrow reading your phone behind your back.
+
+- **Their contact.** *link their contact* opens Android's own contact picker.
+  - You pick them, and Android hands Burrow just that one entry: name, number, and which contact it is.
+  - Burrow has **no contacts permission** and never reads the address book.
+  - Once linked, the page has **call**, **message** and **contact** buttons. These open your phone and texting apps.
+- **Call recordings.** Samsung's recorder names each file after the contact or number, e.g. `Call recording Priya Shah_241030_181205.m4a`.
+  - Burrow reads that name and puts the recording under **calls** on that person's page. It matches the number on their linked contact, their name, or a name they go by. Other phones' patterns, like `Name(+number)_20241030181205`, work too.
+  - The call is titled "call with Priya".
+  - When processed, the voice that isn't yours is suggested as them. One tap confirms it, and that's when the voice is learned.
+- **Chats, only the ones you share.** In WhatsApp: open the chat → ⋮ → More → *Export chat* → *Without media* → **Add chat to Burrow**. Burrow then:
+  - shows what it found and guesses **who's who** (you can change it);
+  - keeps the messages on the phone, linked to each person. The name they use in the chat ("Priya 🌸", "Mum") is remembered, so their calls and later chats link too;
+  - replaces the older copy when you export the same chat again;
+  - doesn't copy media.
+
+  You can search a chat, ask Burrow about it, or forget it.
+- **What Burrow doesn't do.** It has no SMS, call-log or contacts permission. Those are restricted on the Play Store, and nothing here needs them. Burrow never reads messages from other apps on its own.
 
 *How voice matching works:*
 - **The signature:** the Who SDK doesn't expose its internal voice embeddings, so Burrow computes its own compact voice signature: MFCC statistics plus median pitch over each speaker's own turns.
@@ -332,10 +357,11 @@ Ask in your own words, for example "what did Priya promise?", "when is Marco sen
 
 | Tool | What it does | Changes anything? |
 | --- | --- | --- |
-| `find_person` | people you've named, their talks and topics | no |
+| `find_person` | people you've named: their talks, calls, chat messages and topics | no |
 | `search_talks` | talks by words said, title, topic, person or date, with the matching lines | no |
 | `follow_ups` | promises and to-dos, by person, talk or date | no |
 | `talk_details` | one talk: who talked how much, topics, highlights, follow-ups | no |
+| `search_messages` | messages in chats you shared, by words, person or date | no |
 | `find_photos` | photos by what's in them (never intimate ones) | no |
 | `rename_talk` | gives a talk a new title | **yes: asks you first** |
 | `start_recording` | opens the recorder | **yes: asks you first** |
@@ -387,7 +413,8 @@ The original concept screens are in `design/burrow-a/explorations/ask-concept-*.
 | 3.1 | UX pass: every page says what it does, what's tappable and what's next. The vault rebuilt on a biometric-bound wrapped key. Hindi talks via IndicConformer. New adaptive icon |
 | 3.2 | Talks in all 22 scheduled Indian languages, with Omnilingual for 1,600+ others. Choose a talk's language by hand. ASR evaluation in `tools/asr-eval` |
 | 3.3 | In-app light/dark setting; readable warm dark mode; five handwriting levels; more doodles; a gear on every home page; tool-calling concept |
-| 3.4 | **Ask Burrow**: Gemma 4 E2B on the phone with LiteRT-LM, calling seven Burrow tools; changes need your OK; cited answers. Resumable model downloads. Kotlin 2.2. Wipe also removes downloaded language packs |
+| 3.5 | **People, connected**: link a person to their phone contact (picker, no contacts permission); call recordings linked by the name or number in the file; WhatsApp chats added through the share sheet, with who's who; call/message buttons; ask Burrow searches chats. Database v4 |
+| 3.4 | **Ask Burrow**: Gemma 4 E2B on the phone with LiteRT-LM, calling eight Burrow tools; changes need your OK; cited answers. Resumable model downloads. Kotlin 2.2. Wipe also removes downloaded language packs |
 
 Release APKs are built into `dist/`, which is git-ignored.
 
@@ -399,15 +426,18 @@ app/src/main/kotlin/com/showcase/desertant/
   ui/hand/         the hand-drawn components and doodles
   ui/shell/        navigation (BurrowApp), lock screen
   ui/today, photos, meetings, people, mask, privacy, settings, onboarding, share, ask
+  chats/           shared chat exports: ChatParser (WhatsApp formats), ChatImporter
+  people/          voices, People, Contacts (picker + matching), CallLinks
   ask/             ask Burrow: AskAgent (tool loop), BurrowTools, AskModel (Gemma + LiteRT-LM), AskSession
   ui/models/       the Model lab playgrounds
   photos/ meetings/ people/ privacy/ audio/ image/   the engines behind each job
   speech/          IndicConformer + Omnilingual: SpeechPacks, MelFeatures, CtcDecoder
   core/            ModelHub: Desert Ant model loading and downloads
-  data/            Room database (version 3) and DAOs
+  data/            Room database (version 4) and DAOs
 app/src/test/      screenshot tests (ScreenshotsTest, DarkScreenshotsTest, DesignSystemTest,
                    ExplorationTest) and unit tests (SpeechTest, VaultCryptoTest,
-                   VoiceSignaturesTest, MeetingTextTest, AskAgentTest, AskLiveTest)
+                   VoiceSignaturesTest, MeetingTextTest, AskAgentTest, AskLiveTest,
+                   ChatParserTest)
 design/            design directions, briefs, the Burrow A theme, prototype and explorations
 tools/asr-eval/    the speech-model evaluation script and results
 tools/ask-eval/    the live ask Burrow run with the real model, and how to repeat it

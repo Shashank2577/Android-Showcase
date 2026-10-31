@@ -6,6 +6,14 @@ import ai.desertant.gist.PostTopics
 import ai.desertant.gist.RollupOptions
 import ai.desertant.gist.channelTopics
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
+import com.showcase.desertant.data.ProfileEntity
+import com.showcase.desertant.people.Contacts
+import com.showcase.desertant.ui.common.relativeDay
+import com.showcase.desertant.ui.hand.DoodleIcon
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -78,6 +86,12 @@ fun PersonContent(id: Long, open: (String) -> Unit, embedded: Boolean, onBack: (
     val person by remember(id) { db.profiles().observe(id) }.collectAsState(initial = null)
     val appearances by remember(id) { db.speakers().forProfile(id) }.collectAsState(initial = emptyList())
     val meetings by remember { db.meetings().all() }.collectAsState(initial = emptyList())
+    val calls by remember(id) { db.meetings().callsWith(id) }.collectAsState(initial = emptyList())
+    val chatLinks by remember(id) { db.chats().forProfile(id) }.collectAsState(initial = emptyList())
+    val chats by remember { db.chats().all() }.collectAsState(initial = emptyList())
+    val pick = rememberLauncherForActivityResult(Contacts.PickNumber()) { uri ->
+        uri?.let { u -> Contacts.read(context, u)?.let { picked -> scope.launch { people.linkContact(id, picked) } } }
+    }
     var menu by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
@@ -103,6 +117,9 @@ fun PersonContent(id: Long, open: (String) -> Unit, embedded: Boolean, onBack: (
                 PillButton("options ▾", { menu = true }, Modifier.padding(end = 8.dp))
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; renaming = true })
+                    if (person?.contactUri != null || person?.phones?.isNotEmpty() == true) {
+                        DropdownMenuItem(text = { Text("Unlink their contact") }, onClick = { menu = false; scope.launch { people.unlinkContact(id) } })
+                    }
                     DropdownMenuItem(text = { Text("Forget this person") }, onClick = { menu = false; deleting = true })
                 }
             }
@@ -118,12 +135,16 @@ fun PersonContent(id: Long, open: (String) -> Unit, embedded: Boolean, onBack: (
                 Meta(
                     listOfNotNull(
                         mine.map { it.meetingId }.distinct().size.let { if (it == 1) "1 talk" else "$it talks" },
+                        calls.size.takeIf { it > 0 }?.let { if (it == 1) "1 call" else "$it calls" },
+                        chatLinks.filterNot { it.isMe }.sumOf { it.messages }.takeIf { it > 0 }?.let { "$it messages" },
                         "${formatClock(totalTalk)} talking",
                         languages.takeIf { it.isNotEmpty() }?.joinToString(", ") { languageName(it) },
                     ).joinToString(" · "),
                 )
             }
         }
+        Spacer(Modifier.height(14.dp))
+        ContactRow(p, onLink = { pick.launch(Unit) })
         Spacer(Modifier.height(20.dp))
         VoiceSection(p.signatureCount) { samples -> people.enroll(id, samples) }
         if (topics.isNotEmpty()) {
@@ -157,6 +178,40 @@ fun PersonContent(id: Long, open: (String) -> Unit, embedded: Boolean, onBack: (
                 m.title, { open("meeting/${m.id}") },
                 meta = "${dateTime(context, m.createdAt)} · spoke ${formatClock(s.talkSec)} (${"%.0f".format(s.talkSec / m.durationSec.coerceAtLeast(1.0) * 100)}%)",
                 style = Hand.door,
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+        SectionHead("calls", note = calls.size.takeIf { it > 0 }?.let { if (it == 1) "1 recording" else "$it recordings" })
+        if (calls.isEmpty()) {
+            Meta(
+                if (p.phones.isEmpty()) "Call recordings named after them show up here. Link their contact so Burrow also knows their number."
+                else "None yet. Recordings from your phone app (talks → call recordings) land here by their name or number.",
+            )
+        }
+        calls.forEachIndexed { n, m ->
+            if (n > 0) HandDivider(seed = n + 5)
+            Door(
+                m.title, { open("meeting/${m.id}") },
+                meta = "${dateTime(context, m.createdAt)}${if (m.durationSec > 0) " · " + formatClock(m.durationSec) else ""}${if (m.status != MeetingStatus.READY) " · notes not ready yet" else ""}",
+                style = Hand.door,
+                leading = { DoodleIcon(Doodle.PHONE, null, size = 24.dp, color = burrow.pencil) },
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+        val theirChats = chatLinks.mapNotNull { l -> chats.firstOrNull { it.id == l.chatId }?.let { it to l } }.distinctBy { it.first.id }
+        SectionHead("chats", note = "only ones you shared")
+        if (theirChats.isEmpty()) {
+            Meta("To add one: in WhatsApp open your chat with ${p.name.substringBefore(' ')} → ⋮ → More → Export chat → Burrow. Burrow keeps it on this phone and never reads your messages on its own.")
+        }
+        theirChats.forEachIndexed { n, (c, l) ->
+            if (n > 0) HandDivider(seed = n + 9)
+            Door(
+                c.title, { open("chat/${c.id}") },
+                meta = "${l.messages} of ${c.messageCount} messages from them · last ${relativeDay(c.lastAt).lowercase()}",
+                style = Hand.door,
+                leading = { DoodleIcon(Doodle.BUBBLE, null, size = 24.dp, color = burrow.pencil) },
             )
         }
     }
@@ -229,4 +284,25 @@ private fun VoiceSection(samples: Int, onSample: suspend (FloatArray) -> Boolean
         )
     }
     message?.let { DoneNote(it, Modifier.padding(top = 8.dp)) }
+}
+
+/** Their phone contact: call, text or open it — or link one. Burrow only ever sees the contact you pick. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ContactRow(p: ProfileEntity, onLink: () -> Unit) {
+    val context = LocalContext.current
+    val number = Contacts.phonesOf(p).firstOrNull()
+    if (p.contactUri == null && number == null) {
+        PillButton("link their contact", onLink, leading = Doodle.PERSON)
+        Meta("Pick them in your contacts so their call recordings and chats come here. Burrow sees only the one contact you pick.", Modifier.padding(top = 4.dp))
+        return
+    }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (number != null) {
+            PillButton("call", { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number"))) }, leading = Doodle.PHONE)
+            PillButton("message", { context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$number"))) }, leading = Doodle.BUBBLE)
+        }
+        p.contactUri?.let { u -> PillButton("contact", { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) } }, leading = Doodle.PERSON) }
+        PillButton("add a number", onLink, leading = Doodle.PLUS)
+    }
 }

@@ -160,7 +160,8 @@ fun AskContent(
                 listOf(
                     "find what someone said, and in which talk",
                     "list follow-ups and promises, by person or week",
-                    "sum up a talk, or find photos by what's in them",
+                    "search chats you've shared, and sum up a talk",
+                    "find photos by what's in them",
                     "rename a talk or start recording — only after you say yes",
                 ),
             )
@@ -288,6 +289,7 @@ private fun StepRow(step: AskStep) {
 private fun SourceRow(s: AskSource, open: (String) -> Unit) {
     when (s) {
         is AskSource.Talk -> LinkRow(Doodle.WAVE, s.title + (s.atSec?.let { " · ${formatClock(it)}" } ?: ""), s.quote?.let { "“$it”" }) { open("meeting/${s.id}") }
+        is AskSource.Chat -> LinkRow(Doodle.BUBBLE, s.title, "“${s.quote}”") { open("chat/${s.id}") }
         is AskSource.Person -> LinkRow(Doodle.PERSON, s.name, "their page") { open("person/${s.id}") }
         is AskSource.Photos -> {
             LinkRow(Doodle.CAMERA, if (s.count == 1) "1 photo of ${s.query}" else "${s.count} photos of ${s.query}", "on this phone") { open("photos") }
