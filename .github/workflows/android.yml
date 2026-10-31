@@ -1,12 +1,17 @@
 name: Android build
 
 # Every push builds an installable APK (Actions → this run → Artifacts).
-# A tag like v3.4 also publishes it as a GitHub release, the easiest way to
-# download it on a phone.
+# A tag like v3.8, or running this workflow by hand with a release tag, also
+# publishes it as a GitHub release: the easiest way to download it on a phone.
 on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      release:
+        description: Release tag to create and publish (e.g. v3.8); empty for just a build
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -58,8 +63,11 @@ jobs:
             ${{ steps.apk.outputs.name }}.sha256
 
       - uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.release != ''
         with:
+          tag_name: ${{ github.event.inputs.release || github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          name: Burrow ${{ github.event.inputs.release || github.ref_name }}
           prerelease: true
           files: |
             ${{ steps.apk.outputs.name }}
