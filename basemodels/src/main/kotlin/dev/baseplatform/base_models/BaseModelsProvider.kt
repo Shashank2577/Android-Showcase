@@ -85,7 +85,7 @@ class BaseModelsProvider : ContentProvider() {
                     val bytes = rec.optLong("bytes", -1)
                     if (!isPlainName(id) || !isPlainName(name)) continue
                     if (File(File(root, id), name).length() != bytes) continue
-                    out.add(StoredFile(id, name, bytes, rec.optString("sha256").ifEmpty { null }))
+                    out.add(StoredFile(id, name, bytes, if (rec.isNull("sha256")) null else rec.optString("sha256").ifEmpty { null }))
                 }
             }
             return out

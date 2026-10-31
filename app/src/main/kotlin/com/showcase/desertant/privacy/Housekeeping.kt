@@ -36,6 +36,7 @@ object Housekeeping {
         app.privacy.clear()
         if (models) {
             // Burrow lets go of its models; files another app still uses stay for it.
+            com.showcase.desertant.speech.SpeechPacks.cancelAll()
             com.showcase.desertant.speech.SpeechPacks.closeRecognizer()
             app.hub.releaseAll()
             app.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
@@ -44,18 +45,4 @@ object Housekeeping {
         }
     }
 
-    /**
-     * Before the shared model store, the SDK kept its weights loose in the app
-     * cache and speech packs lived in `filesDir/speech`. Both now live in the
-     * store, so the old copies (often over a gigabyte) are deleted once.
-     */
-    fun dropPreStoreModelCache(app: ShowcaseApp) {
-        val prefs = app.getSharedPreferences("housekeeping", android.content.Context.MODE_PRIVATE)
-        if (prefs.getBoolean("pre_store_cache_dropped", false)) return
-        app.cacheDir.listFiles()
-            ?.filter { it.name != "exports" && it.name != "image_manager_disk_cache" }
-            ?.forEach { it.deleteRecursively() }
-        File(app.filesDir, "speech").deleteRecursively()
-        prefs.edit().putBoolean("pre_store_cache_dropped", true).apply()
-    }
 }

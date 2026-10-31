@@ -94,11 +94,12 @@ class ShowcaseApp : Application() {
         scope.launch(Dispatchers.IO) {
             // Tell sibling apps Burrow is still installed, and forget apps not seen for half a year.
             runCatching { models.touchClaims(); models.pruneStaleClaims() }
+            // Models from before the shared store: Desert Ant weights keep working
+            // from the cache, speech packs move into the store when they match.
+            hub.detectPreStoreModels()
             SpeechPacks.adoptPreStorePacks(this@ShowcaseApp)
-            Housekeeping.dropPreStoreModelCache(this@ShowcaseApp)
             SpeechPacks.refresh(this@ShowcaseApp)
         }
-        SpeechPacks.refresh(this)
     }
 
     private companion object {

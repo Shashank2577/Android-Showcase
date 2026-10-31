@@ -13,6 +13,7 @@ import ai.desertant.tongue.Tongue
 import ai.desertant.voz.Voz
 import ai.desertant.who.Who
 import android.content.Context
+import dev.baseplatform.base_models.CancelSignal
 import dev.baseplatform.base_models.DownloadCancelled
 import dev.baseplatform.base_models.SharedModelStore
 import kotlinx.coroutines.CancellationException
@@ -103,8 +104,59 @@ class ModelHub(
     /** The model's catalog id in the shared store, `desertant.<key>`. */
     fun storeId(kind: ModelKind) = "desertant.${kind.name.lowercase()}"
 
-    /** Where the SDK keeps [kind]'s weights: its folder in the shared store. */
-    private fun dir(kind: ModelKind): String = store.pathOf(storeId(kind)).apply { mkdirs() }.path
+    /**
+     * Where the SDK keeps [kind]'s weights: its folder in the shared store, or
+     * for a model downloaded before the store, the app cache where the SDK put
+     * it then (the SDK's own layout there can't be moved safely). Those models
+     * keep working from the cache; once Burrow fetches them again they move
+     * into the store.
+     */
+    private fun dir(kind: ModelKind): String =
+        if (kind in legacyKinds()) context.cacheDir.absolutePath
+        else store.pathOf(storeId(kind)).apply { mkdirs() }.path
+
+    private fun legacyKinds(): Set<ModelKind> =
+        prefs.getStringSet(KEY_LEGACY, emptySet())!!.mapNotNull { n -> ModelKind.entries.firstOrNull { it.name == n } }.toSet()
+
+    private fun setLegacy(kinds: Set<ModelKind>) = prefs.edit().putStringSet(KEY_LEGACY, kinds.map { it.name }.toSet()).apply()
+
+    /**
+     * Once, after the update to the shared store: which models the SDK already
+     * has in the app cache (its old default folder). Blocking: call off the main thread.
+     */
+    fun detectPreStoreModels() {
+        if (prefs.getBoolean(KEY_LEGACY_DETECTED, false)) return
+        val found = ModelKind.entries.filter { !it.bundled }.filter { kind ->
+            val old = runCatching { legacyInstance(kind) }.getOrNull() ?: return@filter false
+            try {
+                runCatching { isDownloadedOf(old) }.getOrDefault(false)
+            } finally {
+                (old as? AutoCloseable)?.runCatching { close() }
+            }
+        }.toSet()
+        setLegacy(found)
+        prefs.edit().putBoolean(KEY_LEGACY_DETECTED, true).apply()
+        // Instances made before this ran point at the store; recreate them.
+        synchronized(this) { found.forEach { k -> (instances.remove(k) as? AutoCloseable)?.runCatching { close() } } }
+    }
+
+    /** The SDK's own default folder (the app cache), as before the store. */
+    private fun legacyInstance(kind: ModelKind): Any? = when (kind) {
+        ModelKind.CLEAR -> Clear(context)
+        ModelKind.EAR -> Ear(context)
+        ModelKind.EMO -> Emo(context)
+        ModelKind.EYE -> Eye(context)
+        ModelKind.GIST -> Gist(context)
+        ModelKind.MODERATOR -> Moderator(context)
+        ModelKind.REDACT -> Redact(context)
+        ModelKind.SHAPES -> Shapes(context)
+        ModelKind.VOZ -> Voz(context)
+        ModelKind.WHO -> Who(context)
+        ModelKind.TONGUE -> null
+    }
+
+    /** Installs in progress, so a wipe can stop them before they register. */
+    private val signals = HashMap<ModelKind, CancelSignal>()
 
     @Suppress("UNCHECKED_CAST")
     @Synchronized
@@ -142,25 +194,43 @@ class ModelHub(
     }
 
     private suspend fun prepare(kind: ModelKind) {
-        val downloaded = withContext(Dispatchers.IO) { runCatching { isDownloaded(kind) }.getOrDefault(false) }
-        if (downloaded && store.isReady(storeId(kind))) {
-            withContext(Dispatchers.IO) { store.ensure(storeId(kind)) { _, _ -> } } // Claim it for Burrow.
+        val id = storeId(kind)
+        // Registry and sibling checks read files and call other apps: never on the main thread.
+        val (downloaded, registered, inSibling) = withContext(Dispatchers.IO) {
+            val d = runCatching { isDownloaded(kind) }.getOrDefault(false)
+            Triple(d, store.isReady(id), !d && store.inSibling(id))
+        }
+        if (downloaded && kind in legacyKinds()) {
+            set(kind, ModelStatus.Ready) // Still in the old cache folder; works as before.
+            return
+        }
+        if (kind in legacyKinds()) {
+            // The cache copy is gone (Android may clear the cache): from now on, the store.
+            setLegacy(legacyKinds() - kind)
+            unload(kind)
+        }
+        if (downloaded && registered) {
+            withContext(Dispatchers.IO) { store.ensure(id) { _, _ -> } } // Claim it for Burrow.
             set(kind, ModelStatus.Ready)
             return
         }
         // "Never go online" is a promise: with it on, a missing model stays missing
         // (unless a sibling app hands it over, which is not going online).
-        if (offline() && !downloaded && !store.inSibling(storeId(kind))) {
+        if (offline() && !downloaded && !inSibling) {
             set(kind, ModelStatus.NotDownloaded)
             throw OfflineException(kind)
         }
         set(kind, ModelStatus.Downloading)
+        val signal = CancelSignal().also { synchronized(signals) { signals[kind] = it } }
         try {
             withContext(Dispatchers.IO) {
                 // The store copies the folder from a sibling app when one has it,
                 // then the SDK downloads only if its weights still aren't there.
-                store.ensure(storeId(kind), sdkInstall = { _, _ ->
-                    if (!isDownloaded(kind)) runBlocking { download(kind) }
+                store.ensure(id, cancel = signal, sdkInstall = { _, _ ->
+                    if (!isDownloaded(kind)) {
+                        if (store.isOffline()) throw OfflineException(kind)
+                        runBlocking { download(kind) }
+                    }
                 })
             }
             set(kind, ModelStatus.Ready)
@@ -173,6 +243,8 @@ class ModelHub(
         } catch (e: Exception) {
             set(kind, ModelStatus.Failed(e.message ?: e.javaClass.simpleName))
             throw e
+        } finally {
+            synchronized(signals) { if (signals[kind] === signal) signals.remove(kind) }
         }
     }
 
@@ -198,13 +270,33 @@ class ModelHub(
     /** Bytes of the models in the shared store (Burrow's copies of every model, speech packs included). */
     suspend fun cacheBytes(): Long = withContext(Dispatchers.IO) { store.bytesOnDisk() }
 
-    /** Lets go of every model Burrow claimed; files no other app uses are deleted. */
+    /**
+     * Lets go of every model Burrow claimed (files no other app uses are
+     * deleted) and of the ones still in the old cache folder. Installs in
+     * progress stop first, so none registers itself after the wipe.
+     */
     suspend fun releaseAll() = withContext(Dispatchers.IO) {
+        synchronized(signals) { signals.values.forEach { it.cancel(discard = true) } }
         unloadAll()
         store.claimedByThisApp().forEach { store.release(it) }
+        setLegacy(emptySet())
     }
 
     private fun set(kind: ModelKind, status: ModelStatus) = _status.update { it + (kind to status) }
+
+    private fun isDownloadedOf(m: Any): Boolean = when (m) {
+        is Clear -> m.isDownloaded()
+        is Ear -> m.isDownloaded()
+        is Emo -> m.isDownloaded()
+        is Eye -> m.isDownloaded()
+        is Gist -> m.isDownloaded()
+        is Moderator -> m.isDownloaded()
+        is Redact -> m.isDownloaded()
+        is Shapes -> m.isDownloaded()
+        is Voz -> m.isDownloaded()
+        is Who -> m.isDownloaded()
+        else -> true
+    }
 
     private fun isDownloaded(kind: ModelKind): Boolean = when (kind) {
         ModelKind.CLEAR -> clear.isDownloaded()
@@ -238,5 +330,7 @@ class ModelHub(
 
     private companion object {
         const val KEY_API = "api_key"
+        const val KEY_LEGACY = "legacy_cache_models"
+        const val KEY_LEGACY_DETECTED = "legacy_cache_detected"
     }
 }

@@ -144,13 +144,26 @@ object SpeechPacks {
      */
     fun adoptPreStorePacks(context: Context) {
         for (pack in ALL) {
-            val old = File(context.filesDir, "speech/${if (pack.kind == Kind.UNIVERSAL) "universal" else pack.code}")
+            val old = preStoreDir(context, pack)
             if (!old.isDirectory) continue
-            runCatching {
+            val adopted = runCatching {
                 context.app.models.adopt(storeId(pack), mapOf("model.int8.onnx" to File(old, "model.onnx"), "tokens.txt" to File(old, "tokens.txt")))
-            }
+            }.getOrDefault(false)
+            // Only an adopted pack's old folder goes; one that doesn't match the
+            // catalog stays until the pack is fetched again.
+            if (adopted) old.deleteRecursively()
         }
+        File(context.filesDir, "speech").takeIf { it.list()?.isEmpty() == true }?.delete()
     }
+
+    private fun preStoreDir(context: Context, pack: Pack) =
+        File(context.filesDir, "speech/${if (pack.kind == Kind.UNIVERSAL) "universal" else pack.code}")
+
+    /** Downloads in progress, so a wipe can stop them before they register. */
+    private val signals = java.util.concurrent.ConcurrentHashMap<String, dev.baseplatform.base_models.CancelSignal>()
+
+    /** Stops every pack download and drops its partial files (wipe). */
+    fun cancelAll() = signals.values.forEach { it.cancel(discard = true) }
 
     fun refresh(context: Context) {
         _state.update { old ->
@@ -170,20 +183,27 @@ object SpeechPacks {
     fun download(context: Context, pack: Pack) {
         val app = context.app
         if (_state.value[pack.code] is State.Downloading) return
-        if (app.privacy.neverOnline.value && !inSibling(context, pack)) {
-            set(pack.code, State.Failed("“never go online” is on"))
-            return
-        }
         set(pack.code, State.Downloading(0))
         app.scope.launch(Dispatchers.IO) {
+            // Asking sibling apps is a cross-process call: here, off the main thread.
+            if (app.privacy.neverOnline.value && !inSibling(context, pack)) {
+                set(pack.code, State.Failed("“never go online” is on"))
+                return@launch
+            }
+            val signal = dev.baseplatform.base_models.CancelSignal().also { signals[pack.code] = it }
             try {
                 // A sibling app's copy if one has it, else a resumable, verified download.
-                app.models.ensure(storeId(pack), progress = { p -> set(pack.code, State.Downloading((p * 100).toInt())) })
+                app.models.ensure(storeId(pack), progress = { p -> set(pack.code, State.Downloading((p * 100).toInt())) }, cancel = signal)
+                preStoreDir(context, pack).deleteRecursively() // A stale copy from before the store, if one was left.
                 set(pack.code, State.Ready)
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: dev.baseplatform.base_models.DownloadCancelled) {
+                set(pack.code, State.Missing)
             } catch (e: Exception) {
                 set(pack.code, State.Failed(e.message ?: e.javaClass.simpleName))
+            } finally {
+                signals.remove(pack.code, signal)
             }
         }
     }
