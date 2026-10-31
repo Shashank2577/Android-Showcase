@@ -9,3 +9,5 @@ Each direction is owned by its own Claude session, built with Google Stitch and 
 | D | Almost Nothing: five single-moment micro-apps under one brand | [briefs/version-d-almost-nothing.md](briefs/version-d-almost-nothing.md) |
 
 Rejected along the way: "Quiet Paper" (too generic), "Night Signal" dark glow (ugly), "Swiss Expressive" lavender (ugly).
+
+Version A won and became the app (Burrow 3.x). Its theme, prototype and explorations are in [burrow-a](burrow-a/README.md).

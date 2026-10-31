@@ -1,6 +1,11 @@
 # Burrow: Version A, hand-drawn minimal
 
-- `theme/`: the design theme. `THEME.md` covers the principles, tokens and components, and has screenshots of the real app; `tokens.json` holds the values; `fonts/` has the two bundled fonts. The Compose version lives in `app/src/main/kotlin/…/ui/theme` and `ui/hand`.
+- `theme/`: the design theme. `THEME.md` covers the principles, tokens and components, and has screenshots of the real app; `tokens.json` holds the values; `fonts/` has the bundled fonts (Caveat, plus the body voices Inter, Nunito, Shantell Sans and Patrick Hand) with their OFL licences. The Compose version lives in `app/src/main/kotlin/…/ui/theme` and `ui/hand`.
+- `explorations/`: design explorations rendered from the real Compose code by `ExplorationTest`:
+  - the five handwriting voices on Today and talk notes (`spectrum-*.png`, `voice-*.png`);
+  - dark mode before and after;
+  - the settings page;
+  - the "ask Burrow" tool-calling concept.
 - `PRODUCT.md`: the rethought product (six jobs, privacy model, the screens).
 - `prototype/`: a clickable end-to-end prototype with 17 screens and 8 journeys. `index.html` is the shell, and each screen in `screens/` is static HTML with precompiled Tailwind.
   - To run it: `npx serve design/burrow-a/prototype` (or any static server), then open `/`.

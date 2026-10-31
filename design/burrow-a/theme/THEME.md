@@ -56,16 +56,16 @@ Shantell Sans ships as one variable font, and Android sets its informality axis 
 
 | Token | Light | Dark | Use |
 | --- | --- | --- | --- |
-| paper | `#FFFFFF` | `#141414` | Background |
-| ink | `#1A1A1A` | `#F2F0EA` | Text, doodles, the ink pill |
-| pencil | `#6B6B6B` | `#A8A6A0` | Meta lines, secondary text |
-| graphite | `#A3A3A3` | `#6E6C67` | Placeholders, disabled items, faded photos |
-| rule | ink at 15% | ink at 15% | Sketchy dividers |
-| smudge | `#F4F3EF` | `#1F1F1E` | Input wells, the selected row |
-| marker | `#FFE45C` | `#FFE45C` | The single highlight per screen. Text on it is always ink `#1A1A1A` |
-| red pen | `#DC2626` | `#F87171` | Private and destructive states only |
+| paper | `#FFFFFF` | `#1E1D1B` | Background |
+| ink | `#1A1A1A` | `#E8E3D8` | Text, doodles, the ink pill |
+| pencil | `#6B6B6B` | `#B9B3A8` | Meta lines, secondary text |
+| graphite | `#A3A3A3` | `#948E84` | Placeholders, disabled items, faded photos |
+| rule | ink at 15% | ink at 30% | Sketchy dividers |
+| smudge | `#F4F3EF` | `#2D2B28` | Input wells, the selected row |
+| marker | `#FFE45C` | `#D9BF45` | The single highlight per screen. Text on it is always dark (`#1A1A1A` / `#1E1D1B`) |
+| red pen | `#DC2626` | `#FF8A80` | Private and destructive states only |
 
-The type scale uses Caveat for display (52), headline (40), title (30), door (26) and label (21). Inter is used for body (15) and meta (13), and monospace (12) for placeholders like `[NAME_1]` and for timestamps.
+The type scale uses Caveat for display (52), headline (40), title (30), door (26) and label (21). The chosen body voice (default Shantell Sans, see above) is used for body (15) and meta (13), and monospace (12) for placeholders like `[NAME_1]` and for timestamps.
 
 ## Components (`ui/hand`)
 
