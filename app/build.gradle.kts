@@ -31,8 +31,8 @@ android {
         // typed foreground services and scoped storage. The SDK itself needs 24+.
         minSdk = 30
         targetSdk = 35
-        versionCode = 6
-        versionName = "3.3"
+        versionCode = 7
+        versionName = "3.4"
 
         // arm64 only: every current phone (Galaxy Z Fold 7 included) is arm64-v8a,
         // and dropping x86_64 halves the native libraries each model brings.
@@ -49,14 +49,40 @@ android {
         manifestPlaceholders["baseModelsDiscoveryAction"] = "com.showcase.action.SHARED_MODELS"
     }
 
+    signingConfigs {
+        // The vendor's shared test key (synced from baseApp signing/, see its
+        // README): every build of every app is signed alike, so sideloaded
+        // builds update in place and share models with PhoneDots. Public: never
+        // publish to a store with it.
+        create("vendorTest") {
+            storeFile = file("showcase-test.jks")
+            storePassword = "phonedots-test"
+            keyAlias = "phonedots-test"
+            keyPassword = "phonedots-test"
+        }
+        // Your release key, from CI secrets (ANDROID_KEYSTORE_BASE64 and friends).
+        System.getenv("ANDROID_KEYSTORE_PATH")?.let { keystore ->
+            create("release") {
+                storeFile = file(keystore)
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
+        // Without the key file (never the case in this repo), the debug key is used.
+        val vendor = signingConfigs.getByName("vendorTest").takeIf { it.storeFile?.exists() == true }
+        debug {
+            signingConfig = vendor ?: signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Signed with the debug key so `assembleRelease` produces an installable
-            // APK out of the box. Replace with your own signing config to publish.
-            signingConfig = signingConfigs.getByName("debug")
+            // Every app of the vendor signs with the same key, or they can't share models.
+            signingConfig = signingConfigs.findByName("release") ?: vendor ?: signingConfigs.getByName("debug")
         }
     }
 

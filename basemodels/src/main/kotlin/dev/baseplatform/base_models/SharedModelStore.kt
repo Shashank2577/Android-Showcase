@@ -41,6 +41,8 @@ class SharedModelStore(
     private val offline: () -> Boolean = { false },
     private val headersFor: (CatalogFile) -> Map<String, String> = { emptyMap() },
     private val onNetworkBytes: (Long) -> Unit = {},
+    /** One line per step (claimed, copied from a sibling, downloading, checksum ok, failed...) for the app's logs page. */
+    private val log: (String) -> Unit = {},
 ) {
     init {
         root.mkdirs()
@@ -116,7 +118,11 @@ class SharedModelStore(
         sdkInstall: ((dir: File, progress: (Double) -> Unit) -> Unit)? = null,
     ) {
         val spec = catalog.byId(id) ?: throw IllegalArgumentException("$id is not in the catalog")
-        if (isReady(id) && claim(id)) return
+        log("$id: needed")
+        if (isReady(id) && claim(id)) {
+            log("$id: ready, already in the shared store")
+            return
+        }
         val dir = pathOf(id).apply { mkdirs() }
         RandomAccessFile(File(dir, ".download.lock"), "rw").use { raf ->
             var lock: FileLock? = null
@@ -130,20 +136,27 @@ class SharedModelStore(
                         null // This process is installing it on another thread.
                     }
                     if (lock == null) {
+                        log("$id: another app is installing it; waiting")
                         Thread.sleep(2000)
                         if (isReady(id) && claim(id)) return
                     }
                 }
                 if (cancel.cancelled) throw DownloadCancelled()
                 if (isReady(id) && claim(id)) return
+                log("$id: installing (${if (spec.source == "sdk") "through its SDK" else "${spec.files.size} file(s)"})")
                 val recorded = try {
                     if (spec.source == "sdk") installSdk(spec, dir, progress, cancel, sdkInstall) else installFiles(spec, progress, cancel)
                 } catch (e: DownloadCancelled) {
                     if (cancel.discard) deletePartials(id)
+                    log("$id: cancelled${if (cancel.discard) ", partial download deleted" else ", partial download kept to resume"}")
+                    throw e
+                } catch (e: Exception) {
+                    log("$id: FAILED: ${e.message ?: e.javaClass.simpleName}")
                     throw e
                 }
                 if (cancel.cancelled) throw DownloadCancelled()
                 register(spec, recorded)
+                log("$id: ready (${sourceOf(id) ?: "installed"})")
             } finally {
                 lock?.release()
             }
@@ -183,8 +196,12 @@ class SharedModelStore(
             val dest = pathOf(spec.id, f.name)
             val report = { received: Long -> if (total > 0) progress(((done + received).toDouble() / total).coerceIn(0.0, 1.0)) }
             val fromSibling = copyFromSibling(spec.id, f, dest, listed, cancel)
+            if (fromSibling) log("${spec.id}/${f.name}: copied from another app on this phone, checksum ok")
             if (!fromSibling) {
-                if (offline()) throw OfflineException(spec.name)
+                if (offline()) {
+                    log("${spec.id}/${f.name}: not downloaded, \"never go online\" is on")
+                    throw OfflineException(spec.name)
+                }
                 download(f, dest, cancel, report)
             }
             val size = dest.length()
@@ -206,6 +223,7 @@ class SharedModelStore(
         // the download when the SDK accepts it. Never over weights already here.
         val hadFiles = dir.listFiles()?.any { !it.name.startsWith(".") } == true
         val fromSibling = !hadFiles && copySdkFromSibling(spec.id, dir, cancel)
+        if (fromSibling) log("${spec.id}: SDK folder copied from another app on this phone")
         if (!hadFiles && !fromSibling && offline() && !spec.sdkBundled) throw OfflineException(spec.name)
         // The installer is told whether it may go online: after a sibling copy
         // with "never go online" on, it must only check the folder.
@@ -230,7 +248,9 @@ class SharedModelStore(
     // ---------------------------------------------------------------- releasing
 
     /** This app stops using [id]; the files go when no app uses it, unless another app is installing it. */
-    fun release(id: String) = mutate { models ->
+    fun release(id: String) = log("$id: released by this app").let { releaseLocked(id) }
+
+    private fun releaseLocked(id: String) = mutate { models ->
         val entry = models.optJSONObject(id) ?: return@mutate
         entry.optJSONObject("users")?.remove(appId)
         if ((entry.optJSONObject("users")?.length() ?: 0) == 0) {
@@ -373,7 +393,9 @@ class SharedModelStore(
             conn.setRequestProperty("Accept-Encoding", "identity")
             headersFor(f).forEach { (k, v) -> conn.setRequestProperty(k, v) }
             if (existing > 0) conn.setRequestProperty("Range", "bytes=$existing-")
+            log("${f.name}: downloading from ${conn.url.host}${if (existing > 0) ", resuming at $existing bytes" else ""}")
             val code = conn.responseCode
+            log("${f.name}: HTTP $code")
             if (code != 416) {
                 if (code != 200 && code != 206) {
                     throw IOException(
@@ -404,7 +426,9 @@ class SharedModelStore(
                 }
                 progress(received)
             }
+            log("${f.name}: checking SHA-256")
             verify(f, part)
+            log("${f.name}: checksum ok")
             Files.move(part.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING)
         } catch (e: DownloadCancelled) {
             throw e
@@ -498,6 +522,7 @@ class SharedModelStore(
             headersFor: (CatalogFile) -> Map<String, String> = { emptyMap() },
             onNetworkBytes: (Long) -> Unit = {},
             catalog: ModelCatalog = ModelCatalog.fromAsset(context),
+            log: (String) -> Unit = {},
         ) = SharedModelStore(
             storeDir(context),
             context.packageName,
@@ -507,6 +532,7 @@ class SharedModelStore(
             offline,
             headersFor,
             onNetworkBytes,
+            log,
         )
 
         fun sha256(file: File): String {

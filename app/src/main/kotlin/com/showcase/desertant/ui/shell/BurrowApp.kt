@@ -123,6 +123,7 @@ fun BurrowApp(hub: ModelHub, deepLink: String?, onDeepLinkHandled: () -> Unit) {
                     })
                 }
                 composable("settings") { AppSettingsScreen(onBack = back, open = go) }
+                composable("logs") { com.showcase.desertant.ui.settings.LogsScreen(onBack = back) }
                 composable("models") { SettingsScreen(onBack = back, openLab = { go("lab") }) }
                 labGraph(nav)
             }

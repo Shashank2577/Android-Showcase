@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import com.showcase.desertant.core.AppLog
 import com.showcase.desertant.core.ModelHub
 import com.showcase.desertant.data.AppDatabase
 import com.showcase.desertant.notify.Notifications
@@ -29,6 +30,10 @@ import kotlinx.coroutines.launch
 
 class ShowcaseApp : Application() {
     lateinit var hub: ModelHub
+        private set
+
+    /** Step-by-step log for the logs screen (models, speech packs, failures, crashes). */
+    lateinit var log: AppLog
         private set
 
     /** The shared model store: Burrow's models, shared with the vendor's other apps on this phone. */
@@ -69,8 +74,11 @@ class ShowcaseApp : Application() {
         privacy = PrivacySettings(this)
         appearance = Appearance(this)
         ledger = Ledger(this)
-        models = SharedModelStore.open(this, offline = { privacy.neverOnline.value })
-        hub = ModelHub(this, models) { privacy.neverOnline.value }
+        log = AppLog(this).also { it.catchCrashes() }
+        log.add("app", "Burrow ${BuildConfig.VERSION_NAME} started")
+        models = SharedModelStore.open(this, offline = { privacy.neverOnline.value }, log = { log.add("models", it) })
+        log.add("models", "store: ${models.root.path}")
+        hub = ModelHub(this, models, offline = { privacy.neverOnline.value }, log = { log.add("models", it) })
         // Must be set before the first model loads; covers every model in the app.
         hub.applyStoredApiKey(BuildConfig.DESERT_ANT_API_KEY)
         db = AppDatabase.create(this)

@@ -152,6 +152,7 @@ object SpeechPacks {
             // Only an adopted pack's old folder goes; one that doesn't match the
             // catalog stays until the pack is fetched again.
             if (adopted) old.deleteRecursively()
+            context.app.log.add("speech", "${pack.name}: ${if (adopted) "moved into the shared store" else "old copy doesn't match the catalog; kept until fetched again"}")
         }
         File(context.filesDir, "speech").takeIf { it.list()?.isEmpty() == true }?.delete()
     }
@@ -187,6 +188,7 @@ object SpeechPacks {
         app.scope.launch(Dispatchers.IO) {
             // Asking sibling apps is a cross-process call: here, off the main thread.
             if (app.privacy.neverOnline.value && !inSibling(context, pack)) {
+                app.log.add("speech", "${pack.name}: not downloaded, \"never go online\" is on")
                 set(pack.code, State.Failed("“never go online” is on"))
                 return@launch
             }
@@ -201,6 +203,7 @@ object SpeechPacks {
             } catch (e: dev.baseplatform.base_models.DownloadCancelled) {
                 set(pack.code, State.Missing)
             } catch (e: Exception) {
+                app.log.add("speech", "${pack.name}: FAILED: ${e.message ?: e.javaClass.simpleName}")
                 set(pack.code, State.Failed(e.message ?: e.javaClass.simpleName))
             } finally {
                 signals.remove(pack.code, signal)

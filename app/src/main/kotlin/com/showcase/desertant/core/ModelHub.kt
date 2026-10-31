@@ -60,6 +60,8 @@ class ModelHub(
     private val context: Context,
     private val store: SharedModelStore,
     private val offline: () -> Boolean = { false },
+    /** One line per step, for the logs screen. */
+    private val log: (String) -> Unit = {},
 ) {
 
     private val instances = HashMap<ModelKind, Any>()
@@ -136,6 +138,7 @@ class ModelHub(
         }.toSet()
         setLegacy(found)
         prefs.edit().putBoolean(KEY_LEGACY_DETECTED, true).apply()
+        if (found.isNotEmpty()) log("kept in the app cache from before the shared store: ${found.joinToString { storeId(it) }}")
         // Instances made before this ran point at the store; recreate them.
         synchronized(this) { found.forEach { k -> (instances.remove(k) as? AutoCloseable)?.runCatching { close() } } }
     }
@@ -201,6 +204,7 @@ class ModelHub(
             Triple(d, store.isReady(id), !d && store.inSibling(id))
         }
         if (downloaded && kind in legacyKinds()) {
+            log("$id: ready (from the app cache, as before the shared store)")
             set(kind, ModelStatus.Ready) // Still in the old cache folder; works as before.
             return
         }
@@ -217,6 +221,7 @@ class ModelHub(
         // "Never go online" is a promise: with it on, a missing model stays missing
         // (unless a sibling app hands it over, which is not going online).
         if (offline() && !downloaded && !inSibling) {
+            log("$id: not on this phone and \"never go online\" is on")
             set(kind, ModelStatus.NotDownloaded)
             throw OfflineException(kind)
         }
@@ -229,7 +234,9 @@ class ModelHub(
                 store.ensure(id, cancel = signal, sdkInstall = { _, _ ->
                     if (!isDownloaded(kind)) {
                         if (store.isOffline()) throw OfflineException(kind)
+                        log("$id: the Desert Ant SDK is downloading it")
                         runBlocking { download(kind) }
+                        log("$id: SDK download finished")
                     }
                 })
             }
@@ -241,6 +248,7 @@ class ModelHub(
             set(kind, ModelStatus.NotDownloaded)
             throw e
         } catch (e: Exception) {
+            log("$id: FAILED: ${e.message ?: e.javaClass.simpleName}")
             set(kind, ModelStatus.Failed(e.message ?: e.javaClass.simpleName))
             throw e
         } finally {

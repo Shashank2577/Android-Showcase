@@ -385,7 +385,9 @@ Requirements: JDK 17 and Android SDK 35 (or Android Studio). The build targets *
                              #   app/build/explore/  handwriting voices, settings, tool-calling concept
 ```
 
-- **Signing:** the release APK is signed with the debug key so it installs directly. Use your own signing config before publishing.
+- **Signing:** every build (debug and release, local and CI) is signed with the vendor's public test key, `app/showcase-test.jks`, the same key as PhoneDots, so builds update in place and the two apps share downloaded models. With the `ANDROID_KEYSTORE_*` secrets set, CI signs with your own key instead (how to make one, no Play account needed: `baseApp/signing/README.md`). Builds before 3.4 used a random debug key: uninstall that one once.
+- **Getting a build:** every push builds an APK on GitHub Actions (the run's *Artifacts*, `burrow-apk`); a `v*` tag also publishes it as a GitHub release.
+- **Logs:** settings → logs shows each step with models and speech packs (found, copied from another app, downloading, checksum ok, failed) and crashes. *copy all* copies it with the app version and phone model, to paste into a bug report.
 - **Emulator:** to run on an x86_64 emulator, add `"x86_64"` to `abiFilters` in `app/build.gradle.kts`.
 - **License key (optional):** Desert Ant models are free for most apps. If you have a publishable key, enter it in settings or put `desertant.apiKey=pk_live_...` in `local.properties`.
 

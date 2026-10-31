@@ -78,6 +78,8 @@ fun AppSettingsScreen(onBack: () -> Unit, open: (String) -> Unit) {
             leading = { com.showcase.desertant.ui.hand.DoodleIcon(Doodle.LOCK, null, size = 26.dp) })
         Door("models & languages", { open("models") }, meta = "what's on the phone, speech packs for 1,600+ languages",
             leading = { com.showcase.desertant.ui.hand.DoodleIcon(Doodle.SPARK, null, size = 26.dp) })
+        Door("logs", { open("logs") }, meta = "each step Burrow took, to copy when something fails",
+            leading = { com.showcase.desertant.ui.hand.DoodleIcon(Doodle.PEN, null, size = 26.dp) })
     }
 }
 

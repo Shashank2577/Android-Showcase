@@ -1,13 +1,20 @@
 name: Android build
 
+# Every push builds an installable APK (Actions → this run → Artifacts).
+# A tag like v3.4 also publishes it as a GitHub release, the easiest way to
+# download it on a phone.
 on:
   push:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -18,11 +25,48 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Build debug APK
-        run: ./gradlew --no-daemon assembleDebug
+      # Signed with your release key when the ANDROID_KEYSTORE_* secrets exist,
+      # otherwise with the vendor's public test key (app/showcase-test.jks), the
+      # same key as PhoneDots: builds update in place and share models.
+      - name: Build release APK
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
+          fi
+          ./gradlew --no-daemon :basemodels:testDebugUnitTest assembleRelease
+
+      - name: Name the APK
+        id: apk
+        run: |
+          VERSION=$(grep -m1 'versionName = ' app/build.gradle.kts | sed -E 's/.*"(.*)".*/\1/')
+          NAME="Burrow-$VERSION-${GITHUB_SHA::7}-arm64.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$NAME"
+          sha256sum "$NAME" > "$NAME.sha256"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: desert-ant-showcase-debug
-          path: app/build/outputs/apk/debug/*.apk
+          name: burrow-apk
+          path: |
+            ${{ steps.apk.outputs.name }}
+            ${{ steps.apk.outputs.name }}.sha256
 
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          prerelease: true
+          files: |
+            ${{ steps.apk.outputs.name }}
+            ${{ steps.apk.outputs.name }}.sha256
+          body: |
+            Test build for arm64 Android phones (Android 11+).
+
+            **Install:** download the APK on your phone, open it and allow installs from your browser. Signed with the vendor test key, like PhoneDots: later builds update in place, and the two apps share downloaded models. Builds from before 3.4 used a different key: uninstall that one once.
+
+            **Report a problem:** settings → logs → copy all, and paste it into the report.
