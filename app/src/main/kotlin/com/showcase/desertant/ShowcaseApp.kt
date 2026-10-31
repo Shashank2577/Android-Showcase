@@ -16,6 +16,7 @@ import com.showcase.desertant.privacy.PrivacySettings
 import com.showcase.desertant.privacy.Vault
 import com.showcase.desertant.speech.SpeechPacks
 import com.showcase.desertant.ui.theme.Appearance
+import dev.baseplatform.base_models.SharedModelStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -28,6 +29,10 @@ import kotlinx.coroutines.launch
 
 class ShowcaseApp : Application() {
     lateinit var hub: ModelHub
+        private set
+
+    /** The shared model store: Burrow's models, shared with the vendor's other apps on this phone. */
+    lateinit var models: SharedModelStore
         private set
     lateinit var db: AppDatabase
         private set
@@ -64,7 +69,8 @@ class ShowcaseApp : Application() {
         privacy = PrivacySettings(this)
         appearance = Appearance(this)
         ledger = Ledger(this)
-        hub = ModelHub(this) { privacy.neverOnline.value }
+        models = SharedModelStore.open(this, offline = { privacy.neverOnline.value })
+        hub = ModelHub(this, models) { privacy.neverOnline.value }
         // Must be set before the first model loads; covers every model in the app.
         hub.applyStoredApiKey(BuildConfig.DESERT_ANT_API_KEY)
         db = AppDatabase.create(this)
@@ -85,6 +91,13 @@ class ShowcaseApp : Application() {
             }
         })
         scope.launch { Housekeeping.deleteOldAudio(this@ShowcaseApp) }
+        scope.launch(Dispatchers.IO) {
+            // Tell sibling apps Burrow is still installed, and forget apps not seen for half a year.
+            runCatching { models.touchClaims(); models.pruneStaleClaims() }
+            SpeechPacks.adoptPreStorePacks(this@ShowcaseApp)
+            Housekeeping.dropPreStoreModelCache(this@ShowcaseApp)
+            SpeechPacks.refresh(this@ShowcaseApp)
+        }
         SpeechPacks.refresh(this)
     }
 

@@ -272,7 +272,7 @@ The theme lives in `ui/theme`: `Theme.kt` for colours, type and voices, and `App
 ### One app, not three
 
 Burrow stays one app:
-- **Shared models.** The models are the heavy part: about 490 MB to download, plus a ~240 MB APK. Three apps would download them up to three times.
+- **Shared models.** The models are the heavy part: about 490 MB to download, plus a ~240 MB APK. Separate apps would download them once (the shared model store hands them between apps), but on Android each app keeps its own copy on disk.
 - **Connected jobs.** A named voice links to its talks, and a photo found by the sweep goes into the vault. Separate apps would break those links.
 - **One privacy story.** One lock, one vault, one ledger and one "wipe everything" is easier to trust.
 - **Small-tool feel stays.** Mask and share check still feel like small tools, because they live in other apps' share sheet and text-selection menu.
@@ -364,11 +364,12 @@ app/src/main/kotlin/com/showcase/desertant/
   ui/models/       the Model lab playgrounds
   photos/ meetings/ people/ privacy/ audio/ image/   the engines behind each job
   speech/          IndicConformer + Omnilingual: SpeechPacks, MelFeatures, CtcDecoder
-  core/            ModelHub: Desert Ant model loading and downloads
+  core/            ModelHub: Desert Ant model loading and downloads, through the shared store
   data/            Room database (version 3) and DAOs
 app/src/test/      screenshot tests (ScreenshotsTest, DarkScreenshotsTest, DesignSystemTest,
                    ExplorationTest) and unit tests (SpeechTest, VaultCryptoTest,
                    VoiceSignaturesTest, MeetingTextTest)
+basemodels/        the shared model store (synced from baseApp): one download per phone for every app of the vendor
 design/            design directions, briefs, the Burrow A theme, prototype and explorations
 tools/asr-eval/    the speech-model evaluation script and results
 ```

@@ -17,8 +17,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
 import java.nio.FloatBuffer
 import java.nio.LongBuffer
 import kotlin.math.sqrt
@@ -37,7 +35,10 @@ import kotlin.math.sqrt
  *   Indian languages (Hindi 33% WER), so it's only the fallback.
  *
  * Packs download once, only when the user asks, and never while "never go
- * online" is on.
+ * online" is on. They live in the shared model store (catalog ids
+ * `speech.indic.<code>` and `speech.omnilingual`), so another app of the vendor
+ * on this phone that has a pack hands it over instead of downloading it, and
+ * every download is resumable and checked against the catalog's SHA-256.
  */
 object SpeechPacks {
     enum class Kind { INDIC, UNIVERSAL }
@@ -125,12 +126,31 @@ object SpeechPacks {
     private val _state = MutableStateFlow<Map<String, State>>(emptyMap())
     val state: StateFlow<Map<String, State>> = _state.asStateFlow()
 
-    private fun dir(context: Context, pack: Pack) = File(context.filesDir, "speech/${if (pack.kind == Kind.UNIVERSAL) "universal" else pack.code}")
-    private fun modelFile(context: Context, pack: Pack) = File(dir(context, pack), "model.onnx")
-    private fun tokensFile(context: Context, pack: Pack) = File(dir(context, pack), "tokens.txt")
+    /** The pack's id in the shared model catalog. */
+    fun storeId(pack: Pack) = if (pack.kind == Kind.UNIVERSAL) "speech.omnilingual" else "speech.indic.${pack.code}"
 
-    fun isReady(context: Context, pack: Pack): Boolean =
-        modelFile(context, pack).length() > 1_000_000 && tokensFile(context, pack).length() > 0
+    private fun modelFile(context: Context, pack: Pack) = context.app.models.pathOf(storeId(pack), "model.int8.onnx")
+    private fun tokensFile(context: Context, pack: Pack) = context.app.models.pathOf(storeId(pack), "tokens.txt")
+
+    fun isReady(context: Context, pack: Pack): Boolean = context.app.models.isReady(storeId(pack))
+
+    /** Another app on this phone has the pack: getting it is a copy, not a download. */
+    fun inSibling(context: Context, pack: Pack): Boolean = context.app.models.inSibling(storeId(pack))
+
+    /**
+     * Packs downloaded before the shared store (`filesDir/speech/<dir>`, model
+     * renamed to model.onnx) move into it when they match the catalog, so the
+     * update doesn't download them again.
+     */
+    fun adoptPreStorePacks(context: Context) {
+        for (pack in ALL) {
+            val old = File(context.filesDir, "speech/${if (pack.kind == Kind.UNIVERSAL) "universal" else pack.code}")
+            if (!old.isDirectory) continue
+            runCatching {
+                context.app.models.adopt(storeId(pack), mapOf("model.int8.onnx" to File(old, "model.onnx"), "tokens.txt" to File(old, "tokens.txt")))
+            }
+        }
+    }
 
     fun refresh(context: Context) {
         _state.update { old ->
@@ -150,62 +170,29 @@ object SpeechPacks {
     fun download(context: Context, pack: Pack) {
         val app = context.app
         if (_state.value[pack.code] is State.Downloading) return
-        if (app.privacy.neverOnline.value) {
+        if (app.privacy.neverOnline.value && !inSibling(context, pack)) {
             set(pack.code, State.Failed("“never go online” is on"))
             return
         }
         set(pack.code, State.Downloading(0))
         app.scope.launch(Dispatchers.IO) {
             try {
-                dir(context, pack).mkdirs()
-                fetch(pack.tokensUrl, tokensFile(context, pack)) {}
-                fetch(pack.modelUrl, modelFile(context, pack)) { p -> set(pack.code, State.Downloading(p)) }
+                // A sibling app's copy if one has it, else a resumable, verified download.
+                app.models.ensure(storeId(pack), progress = { p -> set(pack.code, State.Downloading((p * 100).toInt())) })
                 set(pack.code, State.Ready)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                dir(context, pack).deleteRecursively()
                 set(pack.code, State.Failed(e.message ?: e.javaClass.simpleName))
             }
         }
     }
 
+    /** Burrow stops using the pack; the files go unless another app still uses them. */
     fun remove(context: Context, pack: Pack) {
         closeRecognizer()
-        dir(context, pack).deleteRecursively()
+        context.app.models.release(storeId(pack))
         set(pack.code, State.Missing)
-    }
-
-    private fun fetch(url: String, out: File, progress: (Int) -> Unit) {
-        val tmp = File(out.path + ".part")
-        var conn = URL(url).openConnection() as HttpURLConnection
-        // Hugging Face answers with a redirect to its CDN.
-        var hops = 0
-        while (conn.responseCode in 300..399 && hops++ < 5) {
-            val next = conn.getHeaderField("Location") ?: break
-            conn.disconnect()
-            conn = URL(URL(url), next).openConnection() as HttpURLConnection
-        }
-        if (conn.responseCode != 200) throw IllegalStateException("the model files weren't found (HTTP ${conn.responseCode})")
-        val total = conn.contentLengthLong
-        conn.inputStream.use { input ->
-            tmp.outputStream().use { output ->
-                val buf = ByteArray(1 shl 16)
-                var read = 0L
-                var last = -1
-                while (true) {
-                    val n = input.read(buf)
-                    if (n < 0) break
-                    output.write(buf, 0, n)
-                    read += n
-                    if (total > 0) {
-                        val p = (read * 100 / total).toInt()
-                        if (p != last) { last = p; progress(p) }
-                    }
-                }
-            }
-        }
-        if (!tmp.renameTo(out)) throw IllegalStateException("couldn't save ${out.name}")
     }
 
     // One recognizer at a time: a pack is a few hundred MB in memory.

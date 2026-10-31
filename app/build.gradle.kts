@@ -41,6 +41,12 @@ android {
 
         buildConfigField("String", "DESERT_ANT_API_KEY", "\"$desertAntApiKey\"")
         buildConfigField("String", "DESERT_ANT_SDK_VERSION", "\"$desertAntVersion\"")
+
+        // The shared model store: the same values in every app of the vendor
+        // (baseApp platform.yaml → sharedModels), so Burrow and its sibling apps
+        // hand each other models instead of downloading them again.
+        manifestPlaceholders["baseModelsPermission"] = "com.showcase.permission.SHARED_MODELS"
+        manifestPlaceholders["baseModelsDiscoveryAction"] = "com.showcase.action.SHARED_MODELS"
     }
 
     buildTypes {
@@ -88,6 +94,9 @@ kotlin {
 }
 
 dependencies {
+    // The shared model store (one download per phone for every app of the vendor).
+    implementation(project(":basemodels"))
+
     // Every Desert Ant model that ships for Android.
     implementation("ai.desertant:clear:$desertAntVersion")
     implementation("ai.desertant:ear:$desertAntVersion")

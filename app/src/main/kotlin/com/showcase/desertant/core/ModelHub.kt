@@ -13,6 +13,8 @@ import ai.desertant.tongue.Tongue
 import ai.desertant.voz.Voz
 import ai.desertant.who.Who
 import android.content.Context
+import dev.baseplatform.base_models.DownloadCancelled
+import dev.baseplatform.base_models.SharedModelStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -24,6 +26,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
 /** A model was needed while "never go online" is on. */
@@ -46,9 +49,17 @@ sealed interface ModelStatus {
  * Construction is cheap — the SDK does nothing until `download()` or the first
  * inference call — so instances are created lazily on first access. [unload]
  * closes a model to release its native memory; the next access recreates it
- * from the on-disk cache without downloading again.
+ * from the on-disk copy without downloading again.
+ *
+ * Weights live in the shared model store ([store]), in the folder
+ * `desertant.<key>` that every app of the vendor uses for that model: a model
+ * another app on this phone already has is copied from it, not downloaded.
  */
-class ModelHub(private val context: Context, private val offline: () -> Boolean = { false }) {
+class ModelHub(
+    private val context: Context,
+    private val store: SharedModelStore,
+    private val offline: () -> Boolean = { false },
+) {
 
     private val instances = HashMap<ModelKind, Any>()
     private val inflight = HashMap<ModelKind, Deferred<Unit>>()
@@ -77,17 +88,23 @@ class ModelHub(private val context: Context, private val offline: () -> Boolean 
         DesertAnt.apiKey = (stored ?: buildTimeKey).ifBlank { null }
     }
 
-    val clear: Clear get() = instance(ModelKind.CLEAR) { Clear(context) }
-    val ear: Ear get() = instance(ModelKind.EAR) { Ear(context) }
-    val emo: Emo get() = instance(ModelKind.EMO) { Emo(context) }
-    val eye: Eye get() = instance(ModelKind.EYE) { Eye(context) }
-    val gist: Gist get() = instance(ModelKind.GIST) { Gist(context) }
-    val moderator: Moderator get() = instance(ModelKind.MODERATOR) { Moderator(context) }
-    val redact: Redact get() = instance(ModelKind.REDACT) { Redact(context) }
-    val shapes: Shapes get() = instance(ModelKind.SHAPES) { Shapes(context) }
+    val clear: Clear get() = instance(ModelKind.CLEAR) { Clear(context, dir(ModelKind.CLEAR)) }
+    val ear: Ear get() = instance(ModelKind.EAR) { Ear(context, dir(ModelKind.EAR)) }
+    val emo: Emo get() = instance(ModelKind.EMO) { Emo(context, dir(ModelKind.EMO)) }
+    val eye: Eye get() = instance(ModelKind.EYE) { Eye(context, dir(ModelKind.EYE)) }
+    val gist: Gist get() = instance(ModelKind.GIST) { Gist(context, dir(ModelKind.GIST)) }
+    val moderator: Moderator get() = instance(ModelKind.MODERATOR) { Moderator(context, dir(ModelKind.MODERATOR)) }
+    val redact: Redact get() = instance(ModelKind.REDACT) { Redact(context, dir(ModelKind.REDACT)) }
+    val shapes: Shapes get() = instance(ModelKind.SHAPES) { Shapes(context, dir(ModelKind.SHAPES)) }
     val tongue: Tongue get() = instance(ModelKind.TONGUE) { Tongue.bundled(context) }
-    val voz: Voz get() = instance(ModelKind.VOZ) { Voz(context) }
-    val who: Who get() = instance(ModelKind.WHO) { Who(context) }
+    val voz: Voz get() = instance(ModelKind.VOZ) { Voz(context, dir(ModelKind.VOZ)) }
+    val who: Who get() = instance(ModelKind.WHO) { Who(context, dir(ModelKind.WHO)) }
+
+    /** The model's catalog id in the shared store, `desertant.<key>`. */
+    fun storeId(kind: ModelKind) = "desertant.${kind.name.lowercase()}"
+
+    /** Where the SDK keeps [kind]'s weights: its folder in the shared store. */
+    private fun dir(kind: ModelKind): String = store.pathOf(storeId(kind)).apply { mkdirs() }.path
 
     @Suppress("UNCHECKED_CAST")
     @Synchronized
@@ -126,20 +143,31 @@ class ModelHub(private val context: Context, private val offline: () -> Boolean 
 
     private suspend fun prepare(kind: ModelKind) {
         val downloaded = withContext(Dispatchers.IO) { runCatching { isDownloaded(kind) }.getOrDefault(false) }
-        if (downloaded) {
+        if (downloaded && store.isReady(storeId(kind))) {
+            withContext(Dispatchers.IO) { store.ensure(storeId(kind)) { _, _ -> } } // Claim it for Burrow.
             set(kind, ModelStatus.Ready)
             return
         }
-        // "Never go online" is a promise: with it on, a missing model stays missing.
-        if (offline()) {
+        // "Never go online" is a promise: with it on, a missing model stays missing
+        // (unless a sibling app hands it over, which is not going online).
+        if (offline() && !downloaded && !store.inSibling(storeId(kind))) {
             set(kind, ModelStatus.NotDownloaded)
             throw OfflineException(kind)
         }
         set(kind, ModelStatus.Downloading)
         try {
-            download(kind)
+            withContext(Dispatchers.IO) {
+                // The store copies the folder from a sibling app when one has it,
+                // then the SDK downloads only if its weights still aren't there.
+                store.ensure(storeId(kind), sdkInstall = { _, _ ->
+                    if (!isDownloaded(kind)) runBlocking { download(kind) }
+                })
+            }
             set(kind, ModelStatus.Ready)
         } catch (e: CancellationException) {
+            set(kind, ModelStatus.NotDownloaded)
+            throw e
+        } catch (e: DownloadCancelled) {
             set(kind, ModelStatus.NotDownloaded)
             throw e
         } catch (e: Exception) {
@@ -167,11 +195,13 @@ class ModelHub(private val context: Context, private val offline: () -> Boolean 
 
     suspend fun unloadAll() = ModelKind.entries.forEach { unload(it) }
 
-    /** Bytes the SDK keeps in the app cache for downloaded models. */
-    suspend fun cacheBytes(): Long = withContext(Dispatchers.IO) {
-        context.cacheDir.listFiles().orEmpty()
-            .filter { it.name != "exports" && it.name != "image_manager_disk_cache" }
-            .sumOf { dir -> dir.walkTopDown().filter { it.isFile }.sumOf { it.length() } }
+    /** Bytes of the models in the shared store (Burrow's copies of every model, speech packs included). */
+    suspend fun cacheBytes(): Long = withContext(Dispatchers.IO) { store.bytesOnDisk() }
+
+    /** Lets go of every model Burrow claimed; files no other app uses are deleted. */
+    suspend fun releaseAll() = withContext(Dispatchers.IO) {
+        unloadAll()
+        store.claimedByThisApp().forEach { store.release(it) }
     }
 
     private fun set(kind: ModelKind, status: ModelStatus) = _status.update { it + (kind to status) }

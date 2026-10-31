@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "DesertAntShowcase"
-include(":app")
+include(":app", ":basemodels")
