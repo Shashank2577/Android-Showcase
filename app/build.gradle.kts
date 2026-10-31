@@ -31,8 +31,8 @@ android {
         // typed foreground services and scoped storage. The SDK itself needs 24+.
         minSdk = 30
         targetSdk = 35
-        versionCode = 8
-        versionName = "3.5"
+        versionCode = 9
+        versionName = "3.6"
 
         // arm64 only: every current phone (Galaxy Z Fold 7 included) is arm64-v8a,
         // and dropping x86_64 halves the native libraries each model brings.

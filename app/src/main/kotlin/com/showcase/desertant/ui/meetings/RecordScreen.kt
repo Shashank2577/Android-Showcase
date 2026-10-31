@@ -148,7 +148,7 @@ fun RecordScreen(onBack: () -> Unit, onSaved: () -> Unit) {
             if (recording == null) {
                 Spacer(Modifier.height(10.dp))
                 Meta(
-                    "Calls: Android doesn't let apps record calls. Turn on call recording in Samsung's Phone app, then bring calls in from talks.",
+                    "Calls: Android doesn't let apps record calls. Record them in your phone app if it can, then bring them in from talks — or share any recording to Burrow.",
                     textAlign = TextAlign.Center,
                 )
             }

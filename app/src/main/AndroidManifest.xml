@@ -89,6 +89,22 @@
             </intent-filter>
         </activity>
 
+        <!-- "Add to Burrow": recordings from any app — any phone's call recorder, voice memos,
+             iPhone recordings that reached this phone. -->
+        <activity
+            android:name=".ui.meetings.AudioImportActivity"
+            android:exported="true"
+            android:label="@string/audio_import_label"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|density|uiMode">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+        </activity>
+
         <!-- Chats: only ones the user exports and shares here (WhatsApp → Export chat).
              Burrow never reads messages from other apps. -->
         <activity

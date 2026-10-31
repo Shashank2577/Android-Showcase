@@ -30,7 +30,7 @@ Bursts and retakes are grouped into *moments*. Burrow keeps the best shot (every
 Opened from Android's share sheet. Before a photo goes to WhatsApp or anywhere else, Burrow reports what's in it: "2 faces · an ID card in the corner · your home location in the photo's metadata". It offers fixes: crop it out (Eye's smart crop), remove location and camera data, blur faces. Then you share the clean copy.
 
 ### 4. Talks: conversations you can find again (Voz + Ear + Who + Clear + Gist + Redact)
-Record a meeting or a lecture (it keeps going with the screen off), or bring in a call from Samsung's call recorder. On the phone, Burrow:
+Record a meeting or a lecture (it keeps going with the screen off), or bring in a call from the phone's own call recorder (any brand that has one), or share any recording to Burrow. On the phone, Burrow:
 1. cleans the audio;
 2. checks the language;
 3. transcribes it;

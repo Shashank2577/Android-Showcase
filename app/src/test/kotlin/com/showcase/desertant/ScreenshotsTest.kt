@@ -231,6 +231,17 @@ open class ScreenshotsTest {
         shot("26-chat-import")
     }
 
+    @Test fun audioImport() {
+        show {
+            com.showcase.desertant.ui.meetings.AudioImportContent(
+                "Priya Shah(+447700900123)_20241030181205.mp3",
+                listOf(ProfileEntity(1, "Sam Carter", 0, isMe = true), ProfileEntity(2, "Priya Shah", 1, phones = "447700900123"), ProfileEntity(3, "Marco Rossi", 2)),
+                busy = false, {}, { _, _, _ -> },
+            )
+        }
+        shot("27-add-recording")
+    }
+
     @Test fun askSetup() { ask(AskUi(), AskModel.State.Downloading(37), ram = 6); shot("21-ask-setup") }
 
     @Test fun askIdle() { ask(AskUi()); shot("22-ask") }
@@ -351,7 +362,7 @@ fun seedSampleData(app: ShowcaseApp) = runBlocking {
                 MeetingSpeakerEntity(meetingId = mum, index = 1, talkSec = 590.0, words = 820, sampleQuote = "Let's check the train times tomorrow."),
             ),
         )
-        // A call recording Samsung named by number, and a WhatsApp chat Priya's in.
+        // A call recording named by number (as phone recorders do), and a WhatsApp chat Priya's in.
         db.meetings().insert(
             MeetingEntity(
                 title = "call with Priya · launch", createdAt = now - 3 * 86_400_000L, durationSec = 612.0, audioPath = "/nonexistent5.m4a",

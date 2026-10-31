@@ -2,7 +2,7 @@
 
 Burrow is an Android app that handles everyday jobs end to end, using small AI models that run **only on your phone**. These are jobs people usually hand to cloud apps. It's built on the [Desert Ant Labs](https://desertant.com) on-device models (`ai.desertant:*:4.2.1`), plus open speech models for Indian and other languages.
 
-The current version is **3.5**. It uses the *hand-drawn minimal* design system in [`design/burrow-a/theme`](design/burrow-a/theme/THEME.md), and is built around the product rethink in [`design/burrow-a/PRODUCT.md`](design/burrow-a/PRODUCT.md).
+The current version is **3.6**. It uses the *hand-drawn minimal* design system in [`design/burrow-a/theme`](design/burrow-a/theme/THEME.md), and is built around the product rethink in [`design/burrow-a/PRODUCT.md`](design/burrow-a/PRODUCT.md).
 
 **Contents:**
 - [Showcase](#showcase)
@@ -56,7 +56,7 @@ Every screenshot here is rendered from the real Compose code with sample data, b
 <td><img src="design/burrow-a/theme/shots/16-person.png" width="200" alt="Person with contact"><br><sub>a person: contact, calls, chats</sub></td>
 <td><img src="design/burrow-a/theme/shots/25-chat.png" width="200" alt="Chat"><br><sub>a chat you shared</sub></td>
 <td><img src="design/burrow-a/theme/shots/26-chat-import.png" width="200" alt="Add a chat"><br><sub>add a chat: who's who</sub></td>
-<td><img src="design/burrow-a/theme/shots/dark-25-chat.png" width="200" alt="Chat, dark"><br><sub>dark: a chat</sub></td>
+<td><img src="design/burrow-a/theme/shots/27-add-recording.png" width="200" alt="Add a recording"><br><sub>add a recording from any app</sub></td>
 </tr>
 </table>
 
@@ -93,7 +93,10 @@ Uses **Eye**: scene and quality tags, faces, embeddings, `Eye.duplicates` and `E
 
 ### Talks: record, understand, remember
 
-1. **Record** a meeting. It keeps going with the screen off, from a foreground service with pause/stop in the notification. You can also **import** any audio or video file, or bring in **call recordings**: Android doesn't let apps record calls, but Samsung's Phone app can (Phone → Settings → Record calls), and Burrow lists those recordings for one-tap import.
+1. **Record** a meeting. It keeps going with the screen off, from a foreground service with pause/stop in the notification. You can also bring audio in three other ways:
+   - **Import** any audio or video file.
+   - Bring in **call recordings** from *talks → call recordings*. Android doesn't let apps record calls, but many phones' own Phone apps can, including Samsung, Xiaomi, OnePlus, Oppo, Realme, Vivo, Honor, Huawei and Motorola. Burrow finds those recordings and voice memos using Android's recording flag and the folders these apps use.
+   - **Share** any recording to Burrow (*Add to Burrow*) from any app. iPhone recordings work too, once they reach the phone through Drive, email or a computer.
 2. **Processing** happens in the background, on the phone, in this order:
    1. Ear identifies the language.
    2. The right speech model writes the transcript with word timings. That's Voz, IndicConformer or Omnilingual; see the languages section below. Audio goes in about 10-minute chunks, cut at pauses.
@@ -146,8 +149,16 @@ Who tells speakers apart within one recording. Burrow links them across recordin
   - You pick them, and Android hands Burrow just that one entry: name, number, and which contact it is.
   - Burrow has **no contacts permission** and never reads the address book.
   - Once linked, the page has **call**, **message** and **contact** buttons. These open your phone and texting apps.
-- **Call recordings.** Samsung's recorder names each file after the contact or number, e.g. `Call recording Priya Shah_241030_181205.m4a`.
-  - Burrow reads that name and puts the recording under **calls** on that person's page. It matches the number on their linked contact, their name, or a name they go by. Other phones' patterns, like `Name(+number)_20241030181205`, work too.
+- **Call recordings, from any phone.** Recording apps name each file after the contact or number, plus a date. Each brand uses its own pattern:
+  - `Call recording Priya Shah_241030_181205.m4a`
+  - `Priya Shah(+447700900123)_20241030181205.mp3`
+  - `Priya Shah 2024-10-30 18-12-05.m4a`
+  - `+447700900123_20241030181205.amr`
+  - `Call with Priya Shah.m4a` (e.g. iPhone call audio saved from Notes)
+
+  Burrow drops the parts that aren't a name (prefixes in several languages, dates, times, counters) and keeps the rest. It puts the recording under **calls** on that person's page, matching the number on their linked contact, their name, or a name they go by.
+  - A number in the name marks the recording as a call.
+  - Anything shared to *Add to Burrow* asks "a talk or a phone call? with whom?", with Burrow's guess filled in.
   - The call is titled "call with Priya".
   - When processed, the voice that isn't yours is suggested as them. One tap confirms it, and that's when the voice is learned.
 - **Chats, only the ones you share.** In WhatsApp: open the chat → ⋮ → More → *Export chat* → *Without media* → **Add chat to Burrow**. Burrow then:
@@ -413,6 +424,7 @@ The original concept screens are in `design/burrow-a/explorations/ask-concept-*.
 | 3.1 | UX pass: every page says what it does, what's tappable and what's next. The vault rebuilt on a biometric-bound wrapped key. Hindi talks via IndicConformer. New adaptive icon |
 | 3.2 | Talks in all 22 scheduled Indian languages, with Omnilingual for 1,600+ others. Choose a talk's language by hand. ASR evaluation in `tools/asr-eval` |
 | 3.3 | In-app light/dark setting; readable warm dark mode; five handwriting levels; more doodles; a gear on every home page; tool-calling concept |
+| 3.6 | Call recordings from any Android phone, not just Samsung: Android's recording flag plus every major brand's folders; file names parsed across brands and languages; *Add to Burrow* in the share sheet for any recording (iPhone files too) |
 | 3.5 | **People, connected**: link a person to their phone contact (picker, no contacts permission); call recordings linked by the name or number in the file; WhatsApp chats added through the share sheet, with who's who; call/message buttons; ask Burrow searches chats. Database v4 |
 | 3.4 | **Ask Burrow**: Gemma 4 E2B on the phone with LiteRT-LM, calling eight Burrow tools; changes need your OK; cited answers. Resumable model downloads. Kotlin 2.2. Wipe also removes downloaded language packs |
 

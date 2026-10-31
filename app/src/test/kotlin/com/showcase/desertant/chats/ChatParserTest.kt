@@ -69,6 +69,36 @@ class ChatParserTest {
         assertNull(CallLinks.whoFromFileName("Call recording _241030_181205.m4a"))
     }
 
+    /** File names as different phone makers' recorders write them. */
+    @Test fun callRecordingNamesAcrossBrands() {
+        val cases = mapOf(
+            "Call recording Priya Shah_241030_181205.m4a" to "Priya Shah", // Samsung
+            "Priya Shah(+447700900123)_20241030181205.mp3" to "Priya Shah(+447700900123)", // Xiaomi
+            "Priya Shah 2024-10-30 18-12-05.m4a" to "Priya Shah", // OnePlus, Oppo, Realme
+            "+447700900123_20241030181205.amr" to "+447700900123", // a number, no contact
+            "Priya Shah@+447700900123_20241030181205.m4a" to "Priya Shah@+447700900123",
+            "Call with Priya Shah.m4a" to "Priya Shah", // iPhone audio saved from Notes
+            "Call_Priya Shah_20241030_181205.wav" to "Priya Shah",
+            "Priya Shah_20241030_181205(1).mp3" to "Priya Shah",
+            "Anruf mit Priya Shah 30.10.2024 18-12.m4a" to "Priya Shah",
+            "Mum 18.12.m4a" to "Mum",
+        )
+        cases.forEach { (file, who) -> assertEquals(file, who, CallLinks.whoFromFileName(file)) }
+        assertNull(CallLinks.whoFromFileName("20241030_181205.m4a"))
+        assertNull(CallLinks.whoFromFileName("Recording 3.m4a"))
+    }
+
+    @Test fun callsVersusVoiceMemos() {
+        assertTrue(CallLinks.isCallRecording("Recordings/Call/", "Priya Shah_241030_181205.m4a"))
+        assertTrue(CallLinks.isCallRecording("MIUI/sound_recorder/call_rec/", "Priya Shah(+447700900123)_20241030181205.mp3"))
+        assertTrue(CallLinks.isCallRecording("Music/Recordings/Call Recordings/", "x.m4a"))
+        assertTrue("a bare number is a call", CallLinks.isCallRecording("Recordings/", "+447700900123_20241030181205.amr"))
+        assertTrue(CallLinks.isCallRecording("Download/", "Call with Priya Shah.m4a"))
+        assertTrue("a name with its number is a call", CallLinks.isCallRecording("", "Priya Shah(+447700900123)_20241030181205.mp3"))
+        assertFalse(CallLinks.isCallRecording("Recordings/Voice Recorder/", "Lecture 3_241030_181205.m4a"))
+        assertFalse(CallLinks.isCallRecording("Recordings/", "Voice 001.m4a"))
+    }
+
     private val priya = ProfileEntity(2, "Priya Shah", 1, phones = "447700900123", aliases = "Priya 🌸")
     private val people = listOf(ProfileEntity(1, "Sam Carter", 0, isMe = true), priya, ProfileEntity(3, "Marco Rossi", 2))
 
