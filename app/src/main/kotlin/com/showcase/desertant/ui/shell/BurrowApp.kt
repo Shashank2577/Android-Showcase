@@ -42,6 +42,7 @@ import com.showcase.desertant.ui.hand.HandNav
 import com.showcase.desertant.ui.hand.HandTab
 import com.showcase.desertant.ui.hand.InkButton
 import com.showcase.desertant.ui.hand.Meta
+import com.showcase.desertant.ui.ask.AskScreen
 import com.showcase.desertant.ui.labGraph
 import com.showcase.desertant.ui.mask.MaskScreen
 import com.showcase.desertant.ui.meetings.DeviceRecordingsScreen
@@ -117,6 +118,7 @@ fun BurrowApp(hub: ModelHub, deepLink: String?, onDeepLinkHandled: () -> Unit) {
                     PersonScreen(e.arguments?.getLong("id") ?: 0, onBack = back, open = go)
                 }
                 composable("mask") { MaskScreen(onBack = back) }
+                composable("ask") { AskScreen(onBack = back, open = go) }
                 composable("privacy") {
                     PrivacyScreen(onBack = back, openModels = { go("models") }, onWiped = {
                         nav.navigate("welcome") { popUpTo(0) { inclusive = true } }

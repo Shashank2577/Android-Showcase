@@ -93,6 +93,9 @@ interface MeetingDao {
 
     @Query("SELECT * FROM meetings WHERE id IN (:ids)")
     suspend fun byIds(ids: List<Long>): List<MeetingEntity>
+
+    @Query("SELECT * FROM meetings WHERE status = :status ORDER BY createdAt DESC")
+    suspend fun byStatus(status: MeetingStatus): List<MeetingEntity>
 }
 
 @Dao
@@ -102,6 +105,9 @@ interface SpeakerDao {
 
     @Query("SELECT * FROM meeting_speakers WHERE meetingId = :meetingId ORDER BY `index`")
     suspend fun forMeetingNow(meetingId: Long): List<MeetingSpeakerEntity>
+
+    @Query("SELECT * FROM meeting_speakers WHERE meetingId IN (:meetingIds)")
+    suspend fun forMeetingsNow(meetingIds: List<Long>): List<MeetingSpeakerEntity>
 
     @Query("SELECT * FROM meeting_speakers WHERE profileId = :profileId")
     fun forProfile(profileId: Long): Flow<List<MeetingSpeakerEntity>>

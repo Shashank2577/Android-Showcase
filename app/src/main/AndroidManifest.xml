@@ -32,6 +32,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Showcase">
 
+        <!-- ask Burrow: lets LiteRT-LM run Gemma on the GPU where the phone has OpenCL;
+             it falls back to the CPU otherwise. -->
+        <uses-native-library android:name="libvndksupport.so" android:required="false" />
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
+
         <!-- configChanges keeps in-flight inference and results across rotation,
              fold/unfold and split-screen resizing;
              Compose recomposes for the new configuration on its own. -->

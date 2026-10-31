@@ -121,6 +121,10 @@ fun SettingsScreen(onBack: () -> Unit, openLab: () -> Unit) {
         SpeechPackList()
 
         Spacer(Modifier.height(18.dp))
+        SectionHead("questions", note = "for ask Burrow")
+        AskModelRow()
+
+        Spacer(Modifier.height(18.dp))
         Door("the model lab", openLab, meta = "try each model on its own, outside Burrow's jobs")
 
         Spacer(Modifier.height(18.dp))

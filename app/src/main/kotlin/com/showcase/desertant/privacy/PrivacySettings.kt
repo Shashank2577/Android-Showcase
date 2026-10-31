@@ -76,6 +76,7 @@ enum class LedgerEntry(val one: String, val many: String) {
     PHOTOS_CHECKED_BEFORE_SHARING("checked 1 photo before sharing", "checked %d photos before sharing"),
     VOICES_LEARNED("learned 1 voice, with your OK", "learned %d voices, with your OK"),
     PHOTOS_VAULTED("locked 1 photo in the vault", "locked %d photos in the vault"),
+    QUESTIONS_ANSWERED("answered 1 question", "answered %d questions"),
     ;
 
     fun line(n: Int) = if (n == 1) one else many.format(n)

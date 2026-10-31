@@ -33,7 +33,6 @@ import com.showcase.desertant.ui.hand.InkButton
 import com.showcase.desertant.ui.hand.Meta
 import com.showcase.desertant.ui.hand.PageIntro
 import com.showcase.desertant.ui.hand.SectionHead
-import com.showcase.desertant.ui.meetings.MeetingDetailScreen
 import com.showcase.desertant.ui.settings.AppSettingsScreen
 import com.showcase.desertant.ui.shell.BurrowApp
 import com.showcase.desertant.ui.theme.BurrowTheme
@@ -75,7 +74,7 @@ class ExplorationTest {
     }
 
     private fun today(v: Voice) = render("voice-${v.ordinal}-${v.name.lowercase()}-today", v) { BurrowApp(app.hub, null) {} }
-    private fun notes(v: Voice) = render("voice-${v.ordinal}-${v.name.lowercase()}-notes", v) { MeetingDetailScreen(1, {}, {}) }
+    private fun notes(v: Voice) = render("voice-${v.ordinal}-${v.name.lowercase()}-notes", v) { BurrowApp(app.hub, "meeting/1") {} }
 
     @Test fun formalToday() = today(Voice.FORMAL)
     @Test fun friendlyToday() = today(Voice.FRIENDLY)

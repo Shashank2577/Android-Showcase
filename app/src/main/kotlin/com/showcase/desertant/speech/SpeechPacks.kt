@@ -7,6 +7,7 @@ import ai.onnxruntime.TensorInfo
 import android.content.Context
 import com.showcase.desertant.app
 import com.showcase.desertant.core.VOZ_LANGUAGES
+import com.showcase.desertant.core.fetch
 import com.showcase.desertant.meetings.quietChunks
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -17,8 +18,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
 import java.nio.FloatBuffer
 import java.nio.LongBuffer
 import kotlin.math.sqrt
@@ -174,38 +173,6 @@ object SpeechPacks {
         closeRecognizer()
         dir(context, pack).deleteRecursively()
         set(pack.code, State.Missing)
-    }
-
-    private fun fetch(url: String, out: File, progress: (Int) -> Unit) {
-        val tmp = File(out.path + ".part")
-        var conn = URL(url).openConnection() as HttpURLConnection
-        // Hugging Face answers with a redirect to its CDN.
-        var hops = 0
-        while (conn.responseCode in 300..399 && hops++ < 5) {
-            val next = conn.getHeaderField("Location") ?: break
-            conn.disconnect()
-            conn = URL(URL(url), next).openConnection() as HttpURLConnection
-        }
-        if (conn.responseCode != 200) throw IllegalStateException("the model files weren't found (HTTP ${conn.responseCode})")
-        val total = conn.contentLengthLong
-        conn.inputStream.use { input ->
-            tmp.outputStream().use { output ->
-                val buf = ByteArray(1 shl 16)
-                var read = 0L
-                var last = -1
-                while (true) {
-                    val n = input.read(buf)
-                    if (n < 0) break
-                    output.write(buf, 0, n)
-                    read += n
-                    if (total > 0) {
-                        val p = (read * 100 / total).toInt()
-                        if (p != last) { last = p; progress(p) }
-                    }
-                }
-            }
-        }
-        if (!tmp.renameTo(out)) throw IllegalStateException("couldn't save ${out.name}")
     }
 
     // One recognizer at a time: a pack is a few hundred MB in memory.

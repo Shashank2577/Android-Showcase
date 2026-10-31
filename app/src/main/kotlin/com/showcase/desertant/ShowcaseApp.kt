@@ -1,5 +1,7 @@
 package com.showcase.desertant
 
+import com.showcase.desertant.ask.AskSession
+
 import android.app.Application
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
@@ -43,6 +45,9 @@ class ShowcaseApp : Application() {
         private set
 
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** "ask Burrow": the current question and answer, in memory only. */
+    val ask: AskSession by lazy { AskSession(this) }
 
     /** Cleanup suggestions, shared by every Photos screen and kept warm for a minute. */
     val photoInsights: StateFlow<PhotoInsights?> by lazy {

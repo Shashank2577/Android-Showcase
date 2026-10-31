@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,6 +21,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -45,6 +48,7 @@ import com.showcase.desertant.ui.hand.MarkedText
 import com.showcase.desertant.ui.hand.Meta
 import com.showcase.desertant.ui.photos.ReviewKind
 import com.showcase.desertant.ui.theme.Hand
+import com.showcase.desertant.ui.theme.bodyStyle
 import com.showcase.desertant.ui.theme.burrow
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -91,6 +95,8 @@ fun TodayScreen(open: (String) -> Unit) {
         )
         Spacer(Modifier.height(8.dp))
         Body("Only what needs you. Tap a line to deal with it.", color = burrow.pencil)
+        Spacer(Modifier.height(16.dp))
+        AskRow { open("ask") }
         Spacer(Modifier.height(20.dp))
 
         var doors = 0
@@ -181,5 +187,24 @@ fun TodayScreen(open: (String) -> Unit) {
         Spacer(Modifier.height(24.dp))
         HandDivider()
         Meta("To check a photo before sending it, share it to Burrow from any app.", Modifier.padding(top = 8.dp))
+    }
+}
+
+/** Looks like a search field; opens "ask Burrow". */
+@Composable
+private fun AskRow(onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(burrow.smudge)
+            .clickable(role = Role.Button, onClickLabel = "ask Burrow", onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        DoodleIcon(Doodle.BUBBLE, null, size = 22.dp, color = burrow.pencil)
+        Spacer(Modifier.width(10.dp))
+        Text("ask Burrow about your talks, people, photos…", Modifier.weight(1f), style = bodyStyle(16f, 22f), color = burrow.graphite, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        DoodleIcon(Doodle.ARROW, null, size = 18.dp, color = burrow.pencil)
     }
 }

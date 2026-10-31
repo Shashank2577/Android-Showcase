@@ -53,6 +53,12 @@ import kotlinx.serialization.builtins.ListSerializer
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import com.showcase.desertant.ask.AskModel
+import com.showcase.desertant.ask.AskSource
+import com.showcase.desertant.ask.AskStep
+import com.showcase.desertant.ask.AskUi
+import com.showcase.desertant.ask.Confirmation
+import com.showcase.desertant.ui.ask.AskContent
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -200,6 +206,30 @@ open class ScreenshotsTest {
 
     @Test fun sweepEmpty() { show { SweepScreen({}, {}) }; shot("13-sweep") }
 
+    private fun ask(ui: AskUi, model: AskModel.State = AskModel.State.Ready, ram: Int = 12) = show {
+        AskContent(ui, model, ram, neverOnline = false, suggestions = listOf("what did Priya promise?", "what was “Q3 roadmap sync” about?", "photos of receipts"), {}, {}, {}, {}, {}, {})
+    }
+
+    @Test fun askSetup() { ask(AskUi(), AskModel.State.Downloading(37), ram = 6); shot("21-ask-setup") }
+
+    @Test fun askIdle() { ask(AskUi()); shot("22-ask") }
+
+    @Test fun askConfirm() {
+        ask(
+            AskUi(
+                question = "rename the roadmap talk to Q3 planning", phase = AskUi.Phase.THINKING,
+                steps = listOf(AskStep("search_talks", "search talks", "query: \"roadmap\"", AskStep.Status.DONE, "Q3 roadmap sync")),
+                pending = Confirmation("rename_talk", "rename “Q3 roadmap sync” to “Q3 planning”"),
+            ),
+        )
+        shot("23-ask-confirm")
+    }
+
+    @Test fun askAnswer() {
+        ask(SAMPLE_ANSWER)
+        shot("24-ask-answer")
+    }
+
     @Config(qualifiers = "w412dp-h915dp-night-xhdpi")
     @Test fun todayDark() {
         show { BurrowApp(app.hub, null) {} }
@@ -220,6 +250,23 @@ open class ScreenshotsTest {
 class DarkScreenshotsTest : ScreenshotsTest() {
     override val prefix = "dark-"
 }
+
+/**
+ * A real answer: what Gemma 4 E2B did for this question over the sample data in
+ * AskLiveTest (build/ask-live.md), replayed here because the model can't run in
+ * a screenshot test.
+ */
+val SAMPLE_ANSWER = AskUi(
+    question = "what did Priya promise?",
+    phase = AskUi.Phase.DONE,
+    steps = listOf(
+        AskStep("find_person", "find a person", "name: \"Priya\"", AskStep.Status.DONE, "Priya Shah · 1 talk"),
+        AskStep("search_talks", "search talks", "query: \"promise\"", AskStep.Status.DONE, "Q3 roadmap sync"),
+        AskStep("follow_ups", "find follow-ups", "person: \"Priya Shah\"", AskStep.Status.DONE, "1 follow-up"),
+    ),
+    answer = "Priya promised to book the launch venue next week, according to the \"Q3 roadmap sync\" talk.",
+    sources = listOf(AskSource.Talk(1, "Q3 roadmap sync", 2260.0, "Then we book the launch venue next week."), AskSource.Person(2, "Priya Shah")),
+)
 
 /** Sample people, talks and ledger entries shared by the screenshot tests. */
 fun seedSampleData(app: ShowcaseApp) = runBlocking {
@@ -252,7 +299,7 @@ fun seedSampleData(app: ShowcaseApp) = runBlocking {
                 utterancesJson = StoreJson.encodeToString(ListSerializer(Utterance.serializer()), utterances),
                 topicsJson = StoreJson.encodeToString(ListSerializer(TopicScore.serializer()), topics),
                 highlightsJson = StoreJson.encodeToString(ListSerializer(Moment.serializer()), listOf(Moment(1, 9.5, "Offline mode ships in November, at the same price."), Moment(0, 32.0, "No cloud tier — everything keeps working without signal."))),
-                followUpsJson = StoreJson.encodeToString(ListSerializer(Moment.serializer()), listOf(Moment(1, 24.5, "Marco will send the budget by Thursday."), Moment(3, 30.5, "Take the hiring plan."))),
+                followUpsJson = StoreJson.encodeToString(ListSerializer(Moment.serializer()), listOf(Moment(2, 1700.0, "I'll send it Thursday, so we have a day to look."), Moment(1, 2260.0, "Then we book the launch venue next week."), Moment(3, 1980.0, "I can take the hiring plan if that helps."))),
                 speakerCount = 4,
             ),
         )

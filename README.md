@@ -1,16 +1,17 @@
 # Burrow: a private notebook for your photos, talks and people
 
-Burrow is an Android app that handles six everyday jobs end to end, using small AI models that run **only on your phone**. These are jobs people usually hand to cloud apps. It's built on the [Desert Ant Labs](https://desertant.com) on-device models (`ai.desertant:*:4.2.1`), plus open speech models for Indian and other languages.
+Burrow is an Android app that handles everyday jobs end to end, using small AI models that run **only on your phone**. These are jobs people usually hand to cloud apps. It's built on the [Desert Ant Labs](https://desertant.com) on-device models (`ai.desertant:*:4.2.1`), plus open speech models for Indian and other languages.
 
-The current version is **3.3**. It uses the *hand-drawn minimal* design system in [`design/burrow-a/theme`](design/burrow-a/theme/THEME.md), and is built around the product rethink in [`design/burrow-a/PRODUCT.md`](design/burrow-a/PRODUCT.md).
+The current version is **3.4**. It uses the *hand-drawn minimal* design system in [`design/burrow-a/theme`](design/burrow-a/theme/THEME.md), and is built around the product rethink in [`design/burrow-a/PRODUCT.md`](design/burrow-a/PRODUCT.md).
 
 **Contents:**
 - [Showcase](#showcase)
-- [The six jobs](#the-six-jobs)
+- [The jobs](#the-jobs)
+- [Ask Burrow](#ask-burrow-on-device-tool-calling)
 - [Appearance](#appearance-light-or-dark-and-a-handwriting-level)
 - [Design system](#design-system)
 - [Research and decisions](#research-and-decisions)
-- [What's next: tool calling](#whats-next-tool-calling)
+- [What's next](#whats-next)
 - [Version history](#version-history)
 - [Repository layout](#repository-layout)
 - [Build and test](#build-and-test)
@@ -45,11 +46,17 @@ Every screenshot here is rendered from the real Compose code with sample data, b
 <td><img src="design/burrow-a/explorations/settings-light.png" width="200" alt="Settings"><br><sub>settings: light/dark, handwriting</sub></td>
 <td><img src="design/burrow-a/theme/shots/01-welcome.png" width="200" alt="Welcome"><br><sub>welcome</sub></td>
 </tr>
+<tr>
+<td><img src="design/burrow-a/theme/shots/21-ask-setup.png" width="200" alt="Ask setup"><br><sub>ask: the one-time model download</sub></td>
+<td><img src="design/burrow-a/theme/shots/22-ask.png" width="200" alt="Ask"><br><sub>ask: in your own words</sub></td>
+<td><img src="design/burrow-a/theme/shots/23-ask-confirm.png" width="200" alt="Ask confirm"><br><sub>ask: changes wait for you</sub></td>
+<td><img src="design/burrow-a/theme/shots/24-ask-answer.png" width="200" alt="Ask answer"><br><sub>ask: every step, every source</sub></td>
+</tr>
 </table>
 
 A clickable HTML prototype of the design (17 screens, 8 journeys) is in [`design/burrow-a/prototype`](design/burrow-a/prototype). On a Fold's inner screen, tablets and in landscape, lists and details sit side by side ([`15-fold-inner-talks.png`](design/burrow-a/theme/shots/15-fold-inner-talks.png)).
 
-## The six jobs
+## The jobs
 
 | Job | Where | Models |
 | --- | --- | --- |
@@ -59,6 +66,7 @@ A clickable HTML prototype of the design (17 screens, 8 journeys) is in [`design
 | Talks: record a conversation and get notes, who spoke when, and follow-ups | talks | Clear, Ear, Voz, Who, Gist, Redact; 22 Indian languages via AI4Bharat IndicConformer, others via Meta Omnilingual |
 | People: name a voice once and Burrow suggests that person afterwards | people | Who, plus Burrow's own voice signature |
 | Mask: swap secrets for placeholders before text goes to an AI, then put them back in the reply | today → mask, any app's text-selection menu → *Mask with Burrow* | Redact, Tongue |
+| **Ask**: questions about your talks, people and photos, answered on the phone by a small model calling Burrow's own tools | today → *ask Burrow…* | Gemma 4 E2B (LiteRT-LM) |
 
 Navigation:
 - **Bottom bar:** four hand-lettered words, **today · photos · talks · people**. *Today* shows only what needs you right now.
@@ -313,32 +321,61 @@ Each candidate model was measured on 60 Google FLEURS test clips per language. L
   - **SraVaani‑1.0** (IISc/ARTPARK, 65 Indian languages and dialects) and the official **IndicConformer 600M multilingual** are gated on Hugging Face. They need a token from an account that has accepted their terms. SraVaani would also need converting from TorchScript to ONNX.
   - **Whisper**, including Hinglish fine-tunes, needs an encoder-decoder runtime that Burrow doesn't have yet.
 
-## What's next: tool calling
+## Ask Burrow: on-device tool calling
 
-Burrow already holds typed data: talks, people, follow-ups, photos and masks. Each piece can become a *tool* that a small language model calls. Here's a concept built from the real components (`ExplorationTest.kt`):
+Ask in your own words, for example "what did Priya promise?", "when is Marco sending the budget?" or "photos of receipts". A small language model on the phone reads the question and calls Burrow's own functions as **tools**. Burrow runs them against its local database and hands the results back. The model then answers from those results only.
 
-| light | dark |
-| --- | --- |
-| ![ask Burrow concept](design/burrow-a/explorations/ask-concept-light.png) | ![ask Burrow concept, dark](design/burrow-a/explorations/ask-concept-dark.png) |
+**Setup:**
+- **The model:** Google's **Gemma 4 E2B** (Apache-2.0, the `litert-community` LiteRT-LM build), run by **LiteRT-LM** 0.16.1. It uses the GPU where the phone allows and the CPU otherwise.
+- **Download:** about 2.6 GB, once, only when you ask. It resumes if cut off, and never downloads while "never go online" is on. It's listed under *settings → models & languages*, where it can be removed. *Wipe everything* with models also removes it.
+- **Memory:** it's loaded only while the ask page is open, and freed a minute after you leave. Phones with less than 8 GB of memory get a warning.
 
-**Options, in order of preference:**
+| Tool | What it does | Changes anything? |
+| --- | --- | --- |
+| `find_person` | people you've named, their talks and topics | no |
+| `search_talks` | talks by words said, title, topic, person or date, with the matching lines | no |
+| `follow_ups` | promises and to-dos, by person, talk or date | no |
+| `talk_details` | one talk: who talked how much, topics, highlights, follow-ups | no |
+| `find_photos` | photos by what's in them (never intimate ones) | no |
+| `rename_talk` | gives a talk a new title | **yes: asks you first** |
+| `start_recording` | opens the recorder | **yes: asks you first** |
 
-1. **"Ask Burrow", fully on the phone (recommended).**
-   - **How:** Google's LiteRT-LM Kotlin SDK runs Gemma on the phone, with tool use and constrained decoding. Google recommends Gemma‑4‑E4B for reliable tool calls; FunctionGemma is a smaller option.
-   - **Read tools:** `find_person`, `search_talks`, `follow_ups`, `find_photos`.
-   - **Change tools:** `mask_text`, `start_recording`, `add_todo`. These always ask you first.
-   - **Answers:** every step is shown, and every answer cites the talk and timestamp.
-   - **Cost:** a 1.5–3 GB opt-in model pack, best on recent flagships.
-2. **Let Gemini and other assistants use Burrow.**
-   - **How:** Android AppFunctions (`androidx.appfunctions`, Android 16+). The system assistant could ask "what did Priya promise?"
-   - **Safeguards:** consent per call, and Burrow masks names before anything leaves.
-   - **Status:** the API is alpha and Gemini integration is a private preview. Worth a prototype, not shipping yet.
-3. **Newer Desert Ant models.**
-   - **Schemer:** typed follow-ups and calendar events without an LLM, once it reaches Android.
+**How it's built** (`app/src/main/kotlin/…/ask/`):
+- **Manual tool loop (`AskAgent`).** Tool calling is handled by Burrow, not left to LiteRT-LM, for four reasons:
+  - each step shows on screen as it happens;
+  - tools that change things wait for "do it";
+  - unknown tools and bad arguments go back to the model as errors;
+  - the loop stops after 5 rounds.
+- **Honest answers.** If you say "no" to a change, Burrow writes the answer itself. In testing, the model claimed to have done the change anyway.
+- **Citations.** Sources are picked by Burrow, not the model: only the talk lines whose words the answer actually uses, plus people it names. Each one opens that talk at that moment, or that person's page.
+- **Tools (`BurrowTools`).** Results are compact JSON in plain words ("today (Fri 31 Oct)", "28:20", names rather than ids), to save the small model's context.
+- **Privacy.** Questions and answers live in memory only, and the ledger counts "answered N questions". Nothing is sent anywhere.
+
+**Tested with the real model.** `AskLiveTest` runs Gemma 4 E2B with LiteRT-LM on the build machine's CPU, against the sample data, through the same code the app uses.
+- It chose the right tools for 8 of 8 questions.
+- It invented nothing.
+- It took 4.5–10 s per question.
+
+The full transcript is in [`tools/ask-eval`](tools/ask-eval/README.md). It hasn't been run on a phone yet.
+
+## What's next
+
+1. **Let Gemini and other assistants use Burrow.**
+   - **How:** Android AppFunctions (`androidx.appfunctions`, Android 16+). The same tools could be exposed to the system assistant.
+   - **Safeguards:** consent per call, and Redact masks names before anything leaves.
+   - **Status:** alpha API, with Gemini integration in private preview.
+2. **Newer Desert Ant models.**
+   - **Schemer:** typed follow-ups and events, once it reaches Android.
    - **Title:** names talks.
-   - **Uhm:** strips filler words from transcripts.
+   - **Uhm:** strips filler words.
    - **Face (beta):** groups people in photos.
-4. **Redact as a guard for cloud tools.** If a cloud model is ever used for a tool call, the existing mask flow swaps names and numbers for placeholders first. The real values go back in on the phone.
+3. **Ask, further:**
+   - stream the answer word by word;
+   - follow-up questions in the same conversation;
+   - tools for the vault (behind its fingerprint) and for masking text.
+4. **Redact as a guard for cloud tools.** If a cloud model is ever used, the mask flow swaps names and numbers for placeholders first.
+
+The original concept screens are in `design/burrow-a/explorations/ask-concept-*.png`.
 
 ## Version history
 
@@ -350,6 +387,7 @@ Burrow already holds typed data: talks, people, follow-ups, photos and masks. Ea
 | 3.1 | UX pass: every page says what it does, what's tappable and what's next. The vault rebuilt on a biometric-bound wrapped key. Hindi talks via IndicConformer. New adaptive icon |
 | 3.2 | Talks in all 22 scheduled Indian languages, with Omnilingual for 1,600+ others. Choose a talk's language by hand. ASR evaluation in `tools/asr-eval` |
 | 3.3 | In-app light/dark setting; readable warm dark mode; five handwriting levels; more doodles; a gear on every home page; tool-calling concept |
+| 3.4 | **Ask Burrow**: Gemma 4 E2B on the phone with LiteRT-LM, calling seven Burrow tools; changes need your OK; cited answers. Resumable model downloads. Kotlin 2.2. Wipe also removes downloaded language packs |
 
 Release APKs are built into `dist/`, which is git-ignored.
 
@@ -360,7 +398,8 @@ app/src/main/kotlin/com/showcase/desertant/
   ui/theme/        colours, type, voices, Appearance (light/dark + voice setting)
   ui/hand/         the hand-drawn components and doodles
   ui/shell/        navigation (BurrowApp), lock screen
-  ui/today, photos, meetings, people, mask, privacy, settings, onboarding, share
+  ui/today, photos, meetings, people, mask, privacy, settings, onboarding, share, ask
+  ask/             ask Burrow: AskAgent (tool loop), BurrowTools, AskModel (Gemma + LiteRT-LM), AskSession
   ui/models/       the Model lab playgrounds
   photos/ meetings/ people/ privacy/ audio/ image/   the engines behind each job
   speech/          IndicConformer + Omnilingual: SpeechPacks, MelFeatures, CtcDecoder
@@ -368,9 +407,10 @@ app/src/main/kotlin/com/showcase/desertant/
   data/            Room database (version 3) and DAOs
 app/src/test/      screenshot tests (ScreenshotsTest, DarkScreenshotsTest, DesignSystemTest,
                    ExplorationTest) and unit tests (SpeechTest, VaultCryptoTest,
-                   VoiceSignaturesTest, MeetingTextTest)
+                   VoiceSignaturesTest, MeetingTextTest, AskAgentTest, AskLiveTest)
 design/            design directions, briefs, the Burrow A theme, prototype and explorations
 tools/asr-eval/    the speech-model evaluation script and results
+tools/ask-eval/    the live ask Burrow run with the real model, and how to repeat it
 ```
 
 ## Build and test
@@ -392,17 +432,19 @@ Screenshots are rendered with Robolectric and Roborazzi in native graphics mode,
 
 ## Notes and limits
 
-- **Size:** the APK is about 240 MB, because each native model carries its own runtime and ONNX Runtime is included. First use downloads the weights:
+- **Size:** the APK is about 250 MB, because each native model carries its own runtime, plus ONNX Runtime and LiteRT-LM. First use downloads the weights:
   - Voz about 337 MB, Eye 66 MB, the other Desert Ant models 1–32 MB;
-  - an Indian-language pack about 190 MB each, Omnilingual about 350 MB.
+  - an Indian-language pack about 190 MB each, Omnilingual about 350 MB;
+  - the ask model 2.6 GB, only if you use ask.
 - **Speed:** a few hundred photos take a few minutes. A meeting takes a fraction of its length to process once the models are on the phone.
 - **Long recordings:** up to 2 hours. Very long recordings may hit the phone's memory limit, and the app says so if that happens.
 - **Languages:** topics, highlights and follow-ups are tuned for European languages. Talks in other languages get a transcript, speakers and people, but no topics yet.
-- **Testing:** everything is verified by unit and screenshot tests. Hardware flows (fingerprint, vault, share sheet, recording) need checking on a real phone.
+- **Testing:** everything is verified by unit and screenshot tests, and ask Burrow with the real model on a desktop CPU. Hardware flows (fingerprint, vault, share sheet, recording, ask on a phone's GPU) need checking on a real phone.
 
 ## License
 
 - **Desert Ant models and SDK:** the [Desert Ant Labs Source-Available License](https://license.desertant.com/), free for most apps, with a commercial license required at scale.
 - **IndicConformer:** MIT.
 - **Omnilingual ASR:** Apache-2.0.
+- **Gemma 4 and LiteRT-LM:** Apache-2.0.
 - **Fonts:** SIL Open Font License.

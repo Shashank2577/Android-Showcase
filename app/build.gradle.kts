@@ -31,8 +31,8 @@ android {
         // typed foreground services and scoped storage. The SDK itself needs 24+.
         minSdk = 30
         targetSdk = 35
-        versionCode = 6
-        versionName = "3.3"
+        versionCode = 7
+        versionName = "3.4"
 
         // arm64 only: every current phone (Galaxy Z Fold 7 included) is arm64-v8a,
         // and dropping x86_64 halves the native libraries each model brings.
@@ -70,6 +70,10 @@ android {
             all {
                 it.systemProperty("roborazzi.test.record", "true")
                 it.systemProperty("robolectric.pixelCopyRenderMode", "hardware")
+                // AskLiveTest runs the real "ask Burrow" model when given one:
+                // ./gradlew testDebugUnitTest --tests '*AskLiveTest*' -Pask.model=/path/gemma-4-E2B-it.litertlm -Pask.lib=/dir/with/linux/liblitertlm_jni.so
+                providers.gradleProperty("ask.model").orNull?.let { m -> it.systemProperty("ask.model", m) }
+                providers.gradleProperty("ask.lib").orNull?.let { l -> it.systemProperty("java.library.path", l) }
             }
         }
     }
@@ -103,6 +107,10 @@ dependencies {
 
     // Hindi speech: AI4Bharat's IndicConformer, run with ONNX Runtime (models downloaded on request).
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.31.0")
+
+    // "ask Burrow": Gemma 4 E2B on the phone with LiteRT-LM, which does the tool calling
+    // (model downloaded on request). 0.16.1 is the newest release that builds with Kotlin 2.2.
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.16.1")
 
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
