@@ -1,0 +1,42 @@
+Sam Carter|Okay, let's get going. Three things today: the launch date, the venue, and who's doing the press kit.
+Priya Shah|Before that, quick update: the offline mode build passed QA last night. Two small bugs left, both cosmetic.
+Sam Carter|Great. Are those blocking the launch?
+Priya Shah|No. Arjun says he can fix them by Monday.
+Marco Rossi|On the launch date, I'd push for the twentieth of November. The eighteenth clashes with the big phone event.
+Sam Carter|What does that do to the press embargo?
+Marco Rossi|Embargo would lift on the nineteenth at nine in the morning, UK time. Journalists get the kit a week before.
+Priya Shah|The twentieth works for engineering. We need a code freeze by the thirteenth then.
+Sam Carter|Okay. Let's agree: launch on the twentieth of November, code freeze on the thirteenth.
+Marco Rossi|Agreed.
+Priya Shah|Agreed.
+Sam Carter|Venue. Priya, you had a shortlist?
+Priya Shah|Three places. The warehouse in Shoreditch, the rooftop near King's Cross, and the old library.
+Marco Rossi|Rooftop in November is brave.
+Priya Shah|It has a covered hall too. But the library is closest to the station and fits a hundred and twenty people.
+Sam Carter|How much is the library?
+Priya Shah|Four thousand for the evening, with a five hundred deposit to hold the date.
+Marco Rossi|That's inside the budget we agreed. The warehouse was six and a half.
+Sam Carter|Then the library. Priya, can you book it and pay the deposit this week?
+Priya Shah|Yes, I'll book it by Friday.
+Sam Carter|Press kit. Marco, you said you'd take it?
+Marco Rossi|I can, but I need the final screenshots from design by the tenth.
+Sam Carter|I'll ask Lena for those today.
+Marco Rossi|And I need a quote from you, Sam, for the press release. Two or three lines about why we went offline-first.
+Sam Carter|I'll write it over the weekend and send it Monday.
+Priya Shah|One risk: the Hindi transcription pack is still downloading slowly for some testers.
+Marco Rossi|Is that a launch blocker?
+Priya Shah|Not really. It resumes now. But I'd like a note in the FAQ.
+Sam Carter|Add it to the FAQ then. Who owns the FAQ?
+Priya Shah|I'll take it. I'll draft it by Wednesday.
+Marco Rossi|Budget check: we're at seventy percent of the launch budget with the venue included.
+Sam Carter|Fine. Any paid ads?
+Marco Rossi|I'd skip paid ads for launch week and spend on two creator videos instead.
+Sam Carter|I like that. Let's do the creator videos, no paid ads in launch week.
+Priya Shah|Do we need a backup if the library falls through?
+Sam Carter|The rooftop hall as plan B. Priya, ask them to hold the date without a deposit if they can.
+Priya Shah|Will do.
+Marco Rossi|Last thing: the pricing page still says beta. Someone has to change that before the embargo lifts.
+Sam Carter|I'll update the pricing page by the eighteenth.
+Sam Carter|Okay. Recap: launch on the twentieth, freeze on the thirteenth, library booked by Friday, press kit with Marco.
+Marco Rossi|And creator videos instead of ads.
+Sam Carter|Right. Thanks everyone, same time next week.

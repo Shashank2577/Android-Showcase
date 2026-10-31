@@ -37,6 +37,7 @@ class MeetingWorker(context: Context, params: WorkerParameters) : CoroutineWorke
                     "Meeting notes ready", "Transcript, speakers and highlights for “${dao.get(id)?.title ?: "your meeting"}” are ready.",
                     route = "meeting/$id",
                 )
+                SummaryWorker.enqueueIfWanted(applicationContext, id)
             } catch (e: CancellationException) {
                 withContext(NonCancellable) {
                     dao.setStatus(id, MeetingStatus.FAILED, null, "Stopped before it finished. Tap Try again to continue.")
@@ -78,7 +79,8 @@ class MeetingWorker(context: Context, params: WorkerParameters) : CoroutineWorke
 
     companion object {
         private const val KEY_ID = "meeting"
-        private val oneAtATime = Mutex()
+        /** Shared with summaries: one heavy model job at a time. */
+        internal val oneAtATime = Mutex()
 
         fun enqueue(context: Context, meetingId: Long) {
             val request = OneTimeWorkRequestBuilder<MeetingWorker>()

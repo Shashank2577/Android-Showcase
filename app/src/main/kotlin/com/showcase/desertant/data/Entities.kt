@@ -68,6 +68,12 @@ data class MeetingEntity(
     val sourceKey: String? = null,
     /** The user set [language] by hand; processing uses it instead of asking Ear. */
     val languageChosen: Boolean = false,
+    /** For call recordings: who the call was with, as the phone app named the file (a name or a number). */
+    val callWith: String? = null,
+    /** The person [callWith] is, once Burrow knows. */
+    val callProfileId: Long? = null,
+    /** A [TalkSummary] written on the phone by the ask model, if there is one. */
+    val summaryJson: String? = null,
 )
 
 /** One diarized voice in one meeting, optionally linked to a person. */
@@ -109,6 +115,81 @@ data class ProfileEntity(
     val signatureCount: Int = 0,
     val createdAt: Long = System.currentTimeMillis(),
     val note: String = "",
+    /** Their phone contact, picked by the user (a lookup URI); Burrow never reads the address book. */
+    val contactUri: String? = null,
+    /** Phone numbers from the picked contact, digits only, comma-separated. */
+    val phones: String = "",
+    /** Other names they go by in calls and chats ("Mum", "Priya 🌸"), comma-separated. */
+    val aliases: String = "",
+)
+
+/** A chat the user shared into Burrow (e.g. WhatsApp's "Export chat"). Nothing is read from other apps. */
+@Entity(tableName = "chats")
+data class ChatEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val title: String,
+    /** "whatsapp" or "text". */
+    val source: String,
+    val importedAt: Long,
+    val firstAt: Long,
+    val lastAt: Long,
+    val messageCount: Int,
+)
+
+@Entity(
+    tableName = "chat_messages",
+    foreignKeys = [ForeignKey(entity = ChatEntity::class, parentColumns = ["id"], childColumns = ["chatId"], onDelete = ForeignKey.CASCADE)],
+    indices = [Index("chatId"), Index("at")],
+)
+data class ChatMessageEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val chatId: Long,
+    val at: Long,
+    val sender: String,
+    val text: String,
+)
+
+/** Who each name in a chat is: a person, the user (isMe), or nobody yet. */
+@Entity(
+    tableName = "chat_people",
+    primaryKeys = ["chatId", "sender"],
+    foreignKeys = [ForeignKey(entity = ChatEntity::class, parentColumns = ["id"], childColumns = ["chatId"], onDelete = ForeignKey.CASCADE)],
+    indices = [Index("profileId")],
+)
+data class ChatPersonEntity(
+    val chatId: Long,
+    val sender: String,
+    val profileId: Long? = null,
+    val isMe: Boolean = false,
+    val messages: Int = 0,
+)
+
+/** Notes a language model wrote for a talk: what it was about, what was decided, who does what. */
+@Serializable
+data class TalkSummary(
+    val gist: String,
+    val points: List<SummaryPoint> = emptyList(),
+    val decisions: List<SummaryPoint> = emptyList(),
+    val todos: List<SummaryTodo> = emptyList(),
+    /** The language it's written in, in English ("Hindi"). */
+    val language: String,
+    val model: String,
+    val writtenAt: Long,
+)
+
+/** A line of a summary and, when the model said, the moment in the talk it comes from (seconds). */
+@Serializable
+data class SummaryPoint(val text: String, val at: Double? = null)
+
+@Serializable
+data class SummaryTodo(
+    val what: String,
+    val who: String? = null,
+    /** yyyy-MM-dd, worked out by Burrow from [dueWords] and the talk's date. */
+    val due: String? = null,
+    val at: Double? = null,
+    /** How the talk said it ("by Friday", "अगले मंगलवार"). */
+    val dueWords: String? = null,
 )
 
 @Serializable

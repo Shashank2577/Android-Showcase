@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,6 +24,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.showcase.desertant.app
+import com.showcase.desertant.ask.AskModel
 import com.showcase.desertant.core.VOZ_LANGUAGES
 import com.showcase.desertant.core.languageName
 import com.showcase.desertant.speech.SpeechPacks
@@ -119,5 +121,35 @@ private fun LanguageChoice(label: String, selected: Boolean, onClick: () -> Unit
     ) {
         Text(label, Modifier.weight(1f), style = Hand.label, color = burrow.ink)
         if (selected) Meta("now")
+    }
+}
+
+/** The "ask Burrow" model: Gemma, downloaded on request like a speech pack. */
+@Composable
+fun AskModelRow(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val neverOnline by context.app.privacy.neverOnline.collectAsState()
+    val st by AskModel.state.collectAsState()
+    LaunchedEffect(Unit) { AskModel.refresh(context) }
+    Row(modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("${AskModel.NAME.lowercase()} · Google, Apache-2.0", style = Hand.label, color = burrow.ink)
+            Meta(
+                when (val s = st) {
+                    AskModel.State.Ready -> "on the phone · answers questions with Burrow's tools"
+                    is AskModel.State.Downloading -> "downloading… ${s.percent}%"
+                    is AskModel.State.Failed -> "didn't download: ${s.message}"
+                    AskModel.State.Missing -> "about ${"%.1f".format(AskModel.SIZE_MB / 1000.0)} GB · only needed for ask Burrow"
+                },
+                color = if (st is AskModel.State.Failed) burrow.redPen else burrow.pencil,
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        when {
+            st == AskModel.State.Ready -> PillButton("remove", { AskModel.remove(context) })
+            st is AskModel.State.Downloading -> Unit
+            neverOnline -> Meta("network off")
+            else -> PillButton(if (st is AskModel.State.Failed) "try again" else "download", { AskModel.download(context) })
+        }
     }
 }

@@ -12,6 +12,7 @@ import com.showcase.desertant.core.languageName
 import com.showcase.desertant.data.MeetingSpeakerEntity
 import com.showcase.desertant.data.MeetingStatus
 import com.showcase.desertant.data.Moment
+import com.showcase.desertant.data.ProfileEntity
 import com.showcase.desertant.data.StoreJson
 import com.showcase.desertant.data.TopicScore
 import com.showcase.desertant.data.Utterance
@@ -169,9 +170,13 @@ class MeetingProcessor(private val context: Context) {
             )
         }
 
-        val title = if (meeting.titleEdited) meeting.title else autoTitle(topics, meeting.createdAt, lang?.takeIf { pack != null }?.let { languageName(it).substringBefore(" (") })
+        val linked = suggestCallPerson(meeting.callProfileId, speakers, profiles)
+        val callName = meeting.callWith?.let { who -> profiles.firstOrNull { it.id == meeting.callProfileId }?.name?.substringBefore(' ') ?: who }
+        val title = if (meeting.titleEdited) meeting.title
+        else if (callName != null) "call with $callName" + (topics.firstOrNull()?.let { " · ${it.name.lowercase()}" } ?: "")
+        else autoTitle(topics, meeting.createdAt, lang?.takeIf { pack != null }?.let { languageName(it).substringBefore(" (") })
         db.speakers().deleteForMeeting(meetingId)
-        db.speakers().insert(speakers)
+        db.speakers().insert(linked)
         db.meetings().update(
             meeting.copy(
                 title = title,
@@ -187,10 +192,25 @@ class MeetingProcessor(private val context: Context) {
                 topicsJson = StoreJson.encodeToString(TOPICS, topics),
                 highlightsJson = StoreJson.encodeToString(MOMENTS, keyMoments),
                 followUpsJson = StoreJson.encodeToString(MOMENTS, followUps),
-                speakerCount = speakers.size,
+                speakerCount = linked.size,
             ),
         )
         context.app.ledger.add(LedgerEntry.TALKS_TRANSCRIBED)
+    }
+
+    /**
+     * A call recording's other voice is very likely the person the phone named
+     * the file after. When one voice is the user's, suggest that person for the
+     * other one; the user confirms with one tap, which is when the voice is learned.
+     */
+    private fun suggestCallPerson(callProfileId: Long?, speakers: List<MeetingSpeakerEntity>, profiles: List<ProfileEntity>): List<MeetingSpeakerEntity> {
+        if (callProfileId == null || speakers.size != 2 || speakers.any { it.profileId == callProfileId }) return speakers
+        val me = profiles.firstOrNull { it.isMe }?.id ?: return speakers
+        val mine = speakers.filter { it.profileId == me || it.suggestedProfileId == me }
+        if (mine.size != 1) return speakers
+        return speakers.map { s ->
+            if (s === mine.single() || s.profileId != null) s else s.copy(suggestedProfileId = callProfileId, suggestionScore = null)
+        }
     }
 
     /**

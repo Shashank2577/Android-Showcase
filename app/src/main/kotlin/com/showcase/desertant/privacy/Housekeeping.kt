@@ -3,7 +3,9 @@ package com.showcase.desertant.privacy
 import android.content.Intent
 import androidx.work.WorkManager
 import com.showcase.desertant.ShowcaseApp
+import com.showcase.desertant.ask.AskModel
 import com.showcase.desertant.meetings.RecorderService
+import com.showcase.desertant.speech.SpeechPacks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -32,6 +34,8 @@ object Housekeeping {
         File(app.cacheDir, "exports").deleteRecursively()
         app.vault.wipe()
         app.mask.clear()
+        app.ask.clear()
+        app.summaries.clear()
         app.ledger.clear()
         app.privacy.clear()
         if (models) {
@@ -42,6 +46,7 @@ object Housekeeping {
             app.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
             app.hub.refreshAll()
             com.showcase.desertant.speech.SpeechPacks.refresh(app)
+            AskModel.remove(app)
         }
     }
 

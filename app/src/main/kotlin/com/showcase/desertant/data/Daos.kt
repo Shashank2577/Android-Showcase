@@ -93,6 +93,90 @@ interface MeetingDao {
 
     @Query("SELECT * FROM meetings WHERE id IN (:ids)")
     suspend fun byIds(ids: List<Long>): List<MeetingEntity>
+
+    @Query("SELECT * FROM meetings WHERE status = :status ORDER BY createdAt DESC")
+    suspend fun byStatus(status: MeetingStatus): List<MeetingEntity>
+
+    @Query("SELECT * FROM meetings WHERE callWith IS NOT NULL")
+    suspend fun calls(): List<MeetingEntity>
+
+    @Query("SELECT * FROM meetings WHERE callProfileId = :profileId ORDER BY createdAt DESC")
+    fun callsWith(profileId: Long): Flow<List<MeetingEntity>>
+
+    @Query("UPDATE meetings SET callProfileId = :profileId WHERE id = :id")
+    suspend fun linkCall(id: Long, profileId: Long?)
+
+    @Query("UPDATE meetings SET summaryJson = :json WHERE id = :id")
+    suspend fun setSummary(id: Long, json: String?)
+
+    @Query("SELECT * FROM meetings WHERE status = 'READY' AND createdAt >= :since ORDER BY createdAt DESC")
+    fun readySince(since: Long): Flow<List<MeetingEntity>>
+
+    @Query("SELECT * FROM meetings WHERE summaryJson IS NOT NULL ORDER BY createdAt DESC LIMIT :limit")
+    fun summarized(limit: Int): Flow<List<MeetingEntity>>
+
+    @Query("UPDATE meetings SET callProfileId = NULL WHERE callProfileId = :profileId")
+    suspend fun unlinkCalls(profileId: Long)
+}
+
+@Dao
+interface ChatDao {
+    @Insert
+    suspend fun insert(chat: ChatEntity): Long
+
+    @Insert
+    suspend fun insertMessages(messages: List<ChatMessageEntity>)
+
+    @Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
+    suspend fun upsertPeople(people: List<ChatPersonEntity>)
+
+    @Query("SELECT * FROM chats ORDER BY lastAt DESC")
+    fun all(): Flow<List<ChatEntity>>
+
+    @Query("SELECT * FROM chats ORDER BY lastAt DESC")
+    suspend fun allNow(): List<ChatEntity>
+
+    @Query("SELECT * FROM chats WHERE id = :id")
+    fun observe(id: Long): Flow<ChatEntity?>
+
+    @Query("SELECT * FROM chats WHERE id = :id")
+    suspend fun get(id: Long): ChatEntity?
+
+    @Query("DELETE FROM chats WHERE id = :id")
+    suspend fun delete(id: Long)
+
+    @Query("SELECT * FROM chat_people WHERE chatId = :chatId ORDER BY messages DESC")
+    fun people(chatId: Long): Flow<List<ChatPersonEntity>>
+
+    @Query("SELECT * FROM chat_people")
+    suspend fun allPeopleNow(): List<ChatPersonEntity>
+
+    @Query("SELECT * FROM chat_people")
+    fun allPeople(): Flow<List<ChatPersonEntity>>
+
+    @Query("SELECT * FROM chat_people WHERE profileId = :profileId")
+    fun forProfile(profileId: Long): Flow<List<ChatPersonEntity>>
+
+    @Query("UPDATE chat_people SET profileId = NULL WHERE profileId = :profileId")
+    suspend fun unlinkPerson(profileId: Long)
+
+    @Query("UPDATE chat_people SET profileId = :profileId, isMe = :isMe WHERE chatId = :chatId AND sender = :sender")
+    suspend fun setPerson(chatId: Long, sender: String, profileId: Long?, isMe: Boolean)
+
+    @Query("SELECT * FROM chat_messages WHERE chatId = :chatId ORDER BY at DESC, id DESC LIMIT :limit")
+    fun latest(chatId: Long, limit: Int): Flow<List<ChatMessageEntity>>
+
+    @Query("SELECT * FROM chat_messages WHERE chatId = :chatId AND text LIKE '%' || :q || '%' ORDER BY at DESC LIMIT 200")
+    fun search(chatId: Long, q: String): Flow<List<ChatMessageEntity>>
+
+    @Query("SELECT * FROM chat_messages WHERE text LIKE '%' || :q || '%' AND at >= :since ORDER BY at DESC LIMIT :limit")
+    suspend fun searchAll(q: String, since: Long, limit: Int): List<ChatMessageEntity>
+
+    @Query("SELECT * FROM chat_messages WHERE chatId IN (:chatIds) AND at >= :since ORDER BY at DESC LIMIT :limit")
+    suspend fun recentIn(chatIds: List<Long>, since: Long, limit: Int): List<ChatMessageEntity>
+
+    @Query("SELECT * FROM chat_messages WHERE chatId = :chatId AND sender = :sender ORDER BY at DESC LIMIT 1")
+    suspend fun lastFrom(chatId: Long, sender: String): ChatMessageEntity?
 }
 
 @Dao
@@ -102,6 +186,9 @@ interface SpeakerDao {
 
     @Query("SELECT * FROM meeting_speakers WHERE meetingId = :meetingId ORDER BY `index`")
     suspend fun forMeetingNow(meetingId: Long): List<MeetingSpeakerEntity>
+
+    @Query("SELECT * FROM meeting_speakers WHERE meetingId IN (:meetingIds)")
+    suspend fun forMeetingsNow(meetingIds: List<Long>): List<MeetingSpeakerEntity>
 
     @Query("SELECT * FROM meeting_speakers WHERE profileId = :profileId")
     fun forProfile(profileId: Long): Flow<List<MeetingSpeakerEntity>>

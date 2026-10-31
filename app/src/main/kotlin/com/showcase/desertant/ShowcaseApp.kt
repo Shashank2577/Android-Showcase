@@ -1,5 +1,8 @@
 package com.showcase.desertant
 
+import com.showcase.desertant.ask.AskSession
+import com.showcase.desertant.ask.SummarySettings
+
 import android.app.Application
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
@@ -54,6 +57,12 @@ class ShowcaseApp : Application() {
 
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    /** Summary language and whether talks are summarised as soon as they're ready. */
+    val summaries: SummarySettings by lazy { SummarySettings(this) }
+
+    /** "ask Burrow": the current question and answer, in memory only. */
+    val ask: AskSession by lazy { AskSession(this) }
+
     /** Cleanup suggestions, shared by every Photos screen and kept warm for a minute. */
     val photoInsights: StateFlow<PhotoInsights?> by lazy {
         PhotoInsightsEngine(db.photos()).insights.stateIn(scope, SharingStarted.WhileSubscribed(60_000), null)
@@ -106,6 +115,7 @@ class ShowcaseApp : Application() {
             // from the cache, speech packs move into the store when they match.
             hub.detectPreStoreModels()
             SpeechPacks.adoptPreStorePacks(this@ShowcaseApp)
+            com.showcase.desertant.ask.AskModel.adoptPreStore(this@ShowcaseApp)
             SpeechPacks.refresh(this@ShowcaseApp)
         }
     }

@@ -32,6 +32,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Showcase">
 
+        <!-- ask Burrow: lets LiteRT-LM run Gemma on the GPU where the phone has OpenCL;
+             it falls back to the CPU otherwise. -->
+        <uses-native-library android:name="libvndksupport.so" android:required="false" />
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
+
         <!-- configChanges keeps in-flight inference and results across rotation,
              fold/unfold and split-screen resizing;
              Compose recomposes for the new configuration on its own. -->
@@ -81,6 +86,45 @@
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <!-- "Add to Burrow": recordings from any app — any phone's call recorder, voice memos,
+             iPhone recordings that reached this phone. -->
+        <activity
+            android:name=".ui.meetings.AudioImportActivity"
+            android:exported="true"
+            android:label="@string/audio_import_label"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|density|uiMode">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+        </activity>
+
+        <!-- Chats: only ones the user exports and shares here (WhatsApp → Export chat).
+             Burrow never reads messages from other apps. -->
+        <activity
+            android:name=".ui.chats.ChatImportActivity"
+            android:exported="true"
+            android:label="@string/chat_import_label"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|density|uiMode">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="application/zip" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="application/zip" />
             </intent-filter>
         </activity>
 

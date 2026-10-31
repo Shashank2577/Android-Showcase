@@ -17,6 +17,9 @@ import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.showcase.desertant.data.ChatEntity
+import com.showcase.desertant.data.ChatMessageEntity
+import com.showcase.desertant.data.ChatPersonEntity
 import com.showcase.desertant.data.MeetingEntity
 import com.showcase.desertant.data.MeetingSource
 import com.showcase.desertant.data.MeetingSpeakerEntity
@@ -53,6 +56,12 @@ import kotlinx.serialization.builtins.ListSerializer
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import com.showcase.desertant.ask.AskModel
+import com.showcase.desertant.ask.AskSource
+import com.showcase.desertant.ask.AskStep
+import com.showcase.desertant.ask.AskUi
+import com.showcase.desertant.ask.Confirmation
+import com.showcase.desertant.ui.ask.AskContent
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -200,6 +209,59 @@ open class ScreenshotsTest {
 
     @Test fun sweepEmpty() { show { SweepScreen({}, {}) }; shot("13-sweep") }
 
+    private fun ask(ui: AskUi, model: AskModel.State = AskModel.State.Ready, ram: Int = 12) = show {
+        AskContent(ui, model, ram, neverOnline = false, suggestions = listOf("what did Priya promise?", "what was “Q3 roadmap sync” about?", "photos of receipts"), {}, {}, {}, {}, {}, {})
+    }
+
+    @Test fun chat() {
+        show { com.showcase.desertant.ui.chats.ChatScreen(1, {}, {}) }
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Running 10 min", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        shot("25-chat")
+    }
+
+    @Test fun chatImport() {
+        show {
+            com.showcase.desertant.ui.chats.ChatImportContent(
+                "Marco Rossi", 1_284, "3 Mar 2025 – 30 Oct 2026",
+                listOf("Marco" to 702, "Sam" to 582),
+                mapOf("Marco" to com.showcase.desertant.chats.ChatImporter.Who.Person(3), "Sam" to com.showcase.desertant.chats.ChatImporter.Who.Me),
+                listOf(ProfileEntity(3, "Marco Rossi", 2)), saving = false, {}, {}, {},
+            )
+        }
+        shot("26-chat-import")
+    }
+
+    @Test fun audioImport() {
+        show {
+            com.showcase.desertant.ui.meetings.AudioImportContent(
+                "Priya Shah(+447700900123)_20241030181205.mp3",
+                listOf(ProfileEntity(1, "Sam Carter", 0, isMe = true), ProfileEntity(2, "Priya Shah", 1, phones = "447700900123"), ProfileEntity(3, "Marco Rossi", 2)),
+                busy = false, {}, { _, _, _ -> },
+            )
+        }
+        shot("27-add-recording")
+    }
+
+    @Test fun askSetup() { ask(AskUi(), AskModel.State.Downloading(37), ram = 6); shot("21-ask-setup") }
+
+    @Test fun askIdle() { ask(AskUi()); shot("22-ask") }
+
+    @Test fun askConfirm() {
+        ask(
+            AskUi(
+                question = "rename the roadmap talk to Q3 planning", phase = AskUi.Phase.THINKING,
+                steps = listOf(AskStep("search_talks", "search talks", "query: \"roadmap\"", AskStep.Status.DONE, "Q3 roadmap sync")),
+                pending = Confirmation("rename_talk", "rename “Q3 roadmap sync” to “Q3 planning”"),
+            ),
+        )
+        shot("23-ask-confirm")
+    }
+
+    @Test fun askAnswer() {
+        ask(SAMPLE_ANSWER)
+        shot("24-ask-answer")
+    }
+
     @Config(qualifiers = "w412dp-h915dp-night-xhdpi")
     @Test fun todayDark() {
         show { BurrowApp(app.hub, null) {} }
@@ -221,13 +283,30 @@ class DarkScreenshotsTest : ScreenshotsTest() {
     override val prefix = "dark-"
 }
 
+/**
+ * A real answer: what Gemma 4 E2B did for this question over the sample data in
+ * AskLiveTest (build/ask-live.md), replayed here because the model can't run in
+ * a screenshot test.
+ */
+val SAMPLE_ANSWER = AskUi(
+    question = "what did Priya promise?",
+    phase = AskUi.Phase.DONE,
+    steps = listOf(
+        AskStep("find_person", "find a person", "name: \"Priya\"", AskStep.Status.DONE, "Priya Shah · 1 talk"),
+        AskStep("search_talks", "search talks", "query: \"promise\"", AskStep.Status.DONE, "Q3 roadmap sync"),
+        AskStep("follow_ups", "find follow-ups", "person: \"Priya Shah\"", AskStep.Status.DONE, "1 follow-up"),
+    ),
+    answer = "Priya promised to book the launch venue next week, according to the \"Q3 roadmap sync\" talk.",
+    sources = listOf(AskSource.Talk(1, "Q3 roadmap sync", 2260.0, "Then we book the launch venue next week."), AskSource.Person(2, "Priya Shah")),
+)
+
 /** Sample people, talks and ledger entries shared by the screenshot tests. */
 fun seedSampleData(app: ShowcaseApp) = runBlocking {
         WorkManagerTestInitHelper.initializeTestWorkManager(app)
         val db = app.db
         if (db.profiles().allNow().isNotEmpty()) return@runBlocking
         val me = db.profiles().insert(ProfileEntity(name = "Sam Carter", colorIndex = 0, isMe = true, signatureCount = 3))
-        val priya = db.profiles().insert(ProfileEntity(name = "Priya Shah", colorIndex = 1, signatureCount = 4))
+        val priya = db.profiles().insert(ProfileEntity(name = "Priya Shah", colorIndex = 1, signatureCount = 4, phones = "447700900123", contactUri = "content://com.android.contacts/contacts/lookup/sample/7", aliases = "Priya 🌸"))
         val marco = db.profiles().insert(ProfileEntity(name = "Marco Rossi", colorIndex = 2, signatureCount = 2))
         val now = System.currentTimeMillis()
         val topics = listOf(TopicScore("roadmap", "Roadmap", 0.8), TopicScore("budget", "Budget", 0.6), TopicScore("hiring", "Hiring", 0.4))
@@ -252,14 +331,14 @@ fun seedSampleData(app: ShowcaseApp) = runBlocking {
                 utterancesJson = StoreJson.encodeToString(ListSerializer(Utterance.serializer()), utterances),
                 topicsJson = StoreJson.encodeToString(ListSerializer(TopicScore.serializer()), topics),
                 highlightsJson = StoreJson.encodeToString(ListSerializer(Moment.serializer()), listOf(Moment(1, 9.5, "Offline mode ships in November, at the same price."), Moment(0, 32.0, "No cloud tier — everything keeps working without signal."))),
-                followUpsJson = StoreJson.encodeToString(ListSerializer(Moment.serializer()), listOf(Moment(1, 24.5, "Marco will send the budget by Thursday."), Moment(3, 30.5, "Take the hiring plan."))),
+                followUpsJson = StoreJson.encodeToString(ListSerializer(Moment.serializer()), listOf(Moment(2, 1700.0, "I'll send it Thursday, so we have a day to look."), Moment(1, 2260.0, "Then we book the launch venue next week."), Moment(3, 1980.0, "I can take the hiring plan if that helps."))),
                 speakerCount = 4,
             ),
         )
         val mum = db.meetings().insert(
             MeetingEntity(
                 title = "call with Mum", createdAt = now - 26 * 3_600_000L, durationSec = 1090.0, audioPath = "/nonexistent2.m4a",
-                source = MeetingSource.CALL, status = MeetingStatus.READY, speakerCount = 2,
+                source = MeetingSource.CALL, status = MeetingStatus.READY, speakerCount = 2, callWith = "Mum",
                 topicsJson = StoreJson.encodeToString(ListSerializer(TopicScore.serializer()), listOf(TopicScore("family", "Family", 0.7), TopicScore("travel", "Travel", 0.5))),
             ),
         )
@@ -283,6 +362,47 @@ fun seedSampleData(app: ShowcaseApp) = runBlocking {
                 MeetingSpeakerEntity(meetingId = mum, index = 1, talkSec = 590.0, words = 820, sampleQuote = "Let's check the train times tomorrow."),
             ),
         )
+        // A call recording named by number (as phone recorders do), and a WhatsApp chat Priya's in.
+        db.meetings().insert(
+            MeetingEntity(
+                title = "call with Priya · launch", createdAt = now - 3 * 86_400_000L, durationSec = 612.0, audioPath = "/nonexistent5.m4a",
+                source = MeetingSource.CALL, status = MeetingStatus.READY, speakerCount = 2, callWith = "+44 7700 900123", callProfileId = priya,
+            ),
+        )
+        val chat = db.chats().insert(ChatEntity(title = "Priya Shah", source = "whatsapp", importedAt = now, firstAt = now - 5 * 86_400_000L, lastAt = now - 3_600_000L, messageCount = 6))
+        val texts = listOf(
+            "Priya 🌸" to "Venue shortlist is in the doc, have a look?",
+            "Sam" to "Looks good. The second one is closer to the station",
+            "Priya 🌸" to "Agreed. I'll book it next week, deposit is 500",
+            "Sam" to "Perfect, budget from Marco on Thursday",
+            "Priya 🌸" to "(a photo, video or file — not included)",
+            "Priya 🌸" to "Running 10 min late, start without me",
+        )
+        db.chats().insertMessages(texts.mapIndexed { i, (who, t) -> ChatMessageEntity(chatId = chat, at = now - (5 - i) * 86_400_000L + i * 60_000L, sender = who, text = t) })
+        db.chats().upsertPeople(
+            listOf(
+                ChatPersonEntity(chat, "Priya 🌸", priya, messages = 4),
+                ChatPersonEntity(chat, "Sam", me, isMe = true, messages = 2),
+            ),
+        )
+        // Gemma's real summary of this talk, as written (SummaryLiveTest, build/summary-sample.md), minus the point that repeated
+        // the decision (Burrow now drops those); due dates are counted from today so the brief has something to show.
+        val today = java.time.LocalDate.now()
+        val summary = com.showcase.desertant.data.TalkSummary(
+            gist = "The Q3 roadmap sync covered offline mode shipping, the no-cloud promise, budget, and next steps for hiring and venue booking. Key action items were set regarding budget submission and venue booking.",
+            points = listOf(
+                com.showcase.desertant.data.SummaryPoint("Offline mode ships in November, at the same price as today.", 300.0),
+                com.showcase.desertant.data.SummaryPoint("The no-cloud promise holds for every plan; no cloud tier; everything keeps working without signal.", 860.0),
+            ),
+            decisions = listOf(com.showcase.desertant.data.SummaryPoint("The launch budget is agreed.", 1140.0)),
+            todos = listOf(
+                com.showcase.desertant.data.SummaryTodo("send the budget", "Marco Rossi", com.showcase.desertant.ask.DueDates.resolve("Friday", today)?.toString(), 1420.0, "Friday"),
+                com.showcase.desertant.data.SummaryTodo("take the hiring plan", "Speaker 4", null, 1980.0),
+                com.showcase.desertant.data.SummaryTodo("book the launch venue", "Priya Shah", com.showcase.desertant.ask.DueDates.resolve("next week", today)?.toString(), 2260.0, "next week"),
+            ),
+            language = "English", model = "Gemma 4 E2B", writtenAt = now,
+        )
+        db.meetings().setSummary(q3, StoreJson.encodeToString(com.showcase.desertant.data.TalkSummary.serializer(), summary))
         app.ledger.add(LedgerEntry.PHOTOS_CHECKED, 312)
         app.ledger.add(LedgerEntry.TALKS_TRANSCRIBED, 1)
         app.ledger.add(LedgerEntry.TEXTS_MASKED, 2)

@@ -245,6 +245,7 @@ private fun Notes(
             if (audio && player.available) PlayerLine(player, m.durationSec)
             else Meta("The audio was deleted after 30 days. The notes stay.", Modifier.padding(vertical = 8.dp))
         }
+        item { SummarySection(m, onSeek = { player.seek(it) }, open = open) }
         if (speakers.isNotEmpty()) item { Lanes(utterances, speakers, profiles, m.durationSec, player) }
         item { WhoWasThere(speakers, profiles, onAssign, open) }
         if (speakers.any { it.profileId == null }) item { Meta("Name a voice once and Burrow suggests that person in later talks.") }
@@ -252,7 +253,8 @@ private fun Notes(
             SectionHead("worth remembering")
             highlights.forEach { mo -> MomentLine(mo, player) }
         }
-        if (followUps.isNotEmpty()) item {
+        // The summary's to-dos replace the phrase-matched ones once there is a summary.
+        if (followUps.isNotEmpty() && m.summaryJson == null) item {
             SectionHead("to do", note = "tap to tick")
             followUps.forEachIndexed { i, mo ->
                 val ticked = i in done

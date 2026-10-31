@@ -76,12 +76,12 @@ fun DeviceRecordingsScreen(onBack: () -> Unit) {
         onBack = onBack,
         bottom = if (fresh.size > 1) ({ InkButton("bring in all ${fresh.size} new calls", { fresh.forEach { import(it) } }, Modifier.fillMaxWidth()) }) else null,
     ) {
-        PageIntro("calls & recordings", "Recordings other apps saved on this phone. Bring one in and Burrow writes its notes, like any talk.", doodle = Doodle.PHONE)
+        PageIntro("calls & recordings", "Call recordings and voice memos other apps saved on this phone, whatever brand it is. Bring one in and Burrow writes its notes and puts calls on the right person's page.", doodle = Doodle.PHONE)
         when {
             !granted -> {
                 Steps(
                     listOf(
-                        "Turn on call recording in Samsung's Phone app (Phone → ⋮ → Settings → Record calls)",
+                        "Turn on call recording in your phone app, if it has it (usually Phone → Settings → Record calls)",
                         "Let Burrow see your recordings",
                         "Tap “bring in” on a call to get its notes",
                     ),
@@ -93,7 +93,7 @@ fun DeviceRecordingsScreen(onBack: () -> Unit) {
             items == null -> Meta("looking for recordings…")
             items?.isEmpty() == true -> HandEmpty(
                 "no recordings yet.",
-                "Nothing in Recordings/Call or Recordings/Voice Recorder. Turn on call recording in Samsung's Phone app, or import a file from the talks page.",
+                "Burrow found no call or voice recordings on this phone. Turn on call recording in your phone app if it has it, or share a recording to Burrow from any app — iPhone recordings too.",
                 doodle = Doodle.PHONE,
             )
             else -> items.orEmpty().forEachIndexed { n, r ->
