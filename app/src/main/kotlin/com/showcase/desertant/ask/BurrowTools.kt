@@ -272,7 +272,17 @@ class BurrowTools(
             "highlights" to JsonArray(decodeMoments(t.highlightsJson).take(4).map { line(formatClock(it.start), ix.nameOf(id, it.speaker), it.text) }),
             "follow_ups" to JsonArray(decodeMoments(t.followUpsJson).take(5).map { line(formatClock(it.start), ix.nameOf(id, it.speaker), it.text) }),
             "transcript_start" to JsonArray(lines.take(6).map { line(formatClock(it.start), ix.nameOf(id, it.speaker), it.text) }),
-        )
+        ).let { base ->
+            // A written summary, when there is one, says more than the opening lines.
+            val sum = TalkSummaries.decode(t.summaryJson) ?: return@let base
+            JsonObject(
+                base + mapOf(
+                    "summary" to JsonPrimitive(sum.gist),
+                    "decided" to JsonArray(sum.decisions.map { JsonPrimitive(it.text) }),
+                    "to_dos" to JsonArray(sum.todos.map { JsonPrimitive(listOfNotNull(it.who, it.what, it.due?.let { d -> "due $d" }).joinToString(" — ")) }),
+                ),
+            )
+        }
         return result(out, "${t.title} · ${people.size} people", listOf(AskSource.Talk(t.id, t.title)))
     }
 

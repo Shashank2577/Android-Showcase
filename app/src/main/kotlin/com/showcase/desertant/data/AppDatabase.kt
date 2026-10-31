@@ -13,7 +13,7 @@ import kotlinx.serialization.json.Json
         PhotoEntity::class, MeetingEntity::class, MeetingSpeakerEntity::class, ProfileEntity::class,
         ChatEntity::class, ChatMessageEntity::class, ChatPersonEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -25,7 +25,7 @@ abstract class AppDatabase : RoomDatabase() {
 
     companion object {
         fun create(context: Context): AppDatabase =
-            Room.databaseBuilder(context, AppDatabase::class.java, "burrow.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build()
+            Room.databaseBuilder(context, AppDatabase::class.java, "burrow.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build()
 
         /** v3: what the private sweep needs to remember about each photo. */
         private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -56,6 +56,13 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_chat_messages_at` ON `chat_messages` (`at`)")
                 db.execSQL("CREATE TABLE IF NOT EXISTS `chat_people` (`chatId` INTEGER NOT NULL, `sender` TEXT NOT NULL, `profileId` INTEGER, `isMe` INTEGER NOT NULL, `messages` INTEGER NOT NULL, PRIMARY KEY(`chatId`, `sender`), FOREIGN KEY(`chatId`) REFERENCES `chats`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_chat_people_profileId` ON `chat_people` (`profileId`)")
+            }
+        }
+
+        /** 3.7: talk summaries. */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE meetings ADD COLUMN summaryJson TEXT")
             }
         }
     }

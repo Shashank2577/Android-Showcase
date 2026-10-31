@@ -1,6 +1,7 @@
 package com.showcase.desertant
 
 import com.showcase.desertant.ask.AskSession
+import com.showcase.desertant.ask.SummarySettings
 
 import android.app.Application
 import androidx.lifecycle.DefaultLifecycleObserver
@@ -45,6 +46,9 @@ class ShowcaseApp : Application() {
         private set
 
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** Summary language and whether talks are summarised as soon as they're ready. */
+    val summaries: SummarySettings by lazy { SummarySettings(this) }
 
     /** "ask Burrow": the current question and answer, in memory only. */
     val ask: AskSession by lazy { AskSession(this) }

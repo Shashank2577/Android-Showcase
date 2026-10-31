@@ -98,6 +98,7 @@ fun TodayScreen(open: (String) -> Unit) {
         Spacer(Modifier.height(16.dp))
         AskRow { open("ask") }
         Spacer(Modifier.height(20.dp))
+        Brief(open)
 
         var doors = 0
         scan?.let { w ->

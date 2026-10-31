@@ -42,6 +42,9 @@ object AskModel {
     private const val URL = "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm"
     private const val FILE = "gemma-4-E2B-it.litertlm"
 
+    /** The model's window: room for a ~9,000-character part of a transcript plus its notes. */
+    const val MAX_TOKENS = 8192
+
     /** Phones with less memory than this can still try, with a warning. */
     const val COMFORTABLE_RAM_GB = 8
 
@@ -115,7 +118,7 @@ object AskModel {
         engine ?: withContext(Dispatchers.Default) {
             val prefs = context.getSharedPreferences("ask", Context.MODE_PRIVATE)
             val path = file(context).path
-            fun load(backend: Backend) = Engine(EngineConfig(modelPath = path, backend = backend, maxNumTokens = 4096, cacheDir = context.cacheDir.path)).also { it.initialize() }
+            fun load(backend: Backend) = Engine(EngineConfig(modelPath = path, backend = backend, maxNumTokens = MAX_TOKENS, cacheDir = context.cacheDir.path)).also { it.initialize() }
             val gpuOk = prefs.getBoolean("gpu_ok", true)
             val e = if (gpuOk) {
                 try {
@@ -131,22 +134,29 @@ object AskModel {
     }
 
     private var releaseJob: Job? = null
+    private var holders = 0
 
-    /** The ask page is open: keep the model loaded. */
+    /** Something needs the model (the ask page, a summary): keep it loaded. */
+    @Synchronized
     fun keep() {
+        holders++
         releaseJob?.cancel()
         releaseJob = null
     }
 
     /**
-     * The ask page closed: free the model's memory in a minute, unless the
-     * user comes back first (say, after opening a talk an answer cited).
+     * That something is done. When nothing holds the model any more, its
+     * memory is freed a minute later, unless something needs it again first
+     * (say, after opening a talk an answer cited).
      */
+    @Synchronized
     fun releaseSoon(scope: CoroutineScope) {
+        holders = (holders - 1).coerceAtLeast(0)
+        if (holders > 0) return
         releaseJob?.cancel()
         releaseJob = scope.launch {
             delay(60_000)
-            lock.withLock { release() }
+            lock.withLock { if (holders == 0) release() }
         }
     }
 
@@ -155,6 +165,14 @@ object AskModel {
         engine?.close()
         engine = null
     }
+}
+
+/** One-shot prompts for summaries: a fresh conversation each time, so parts never leak into each other. */
+class LiteRtText(private val engine: Engine) : TextModel {
+    override fun complete(system: String, prompt: String): String =
+        engine.createConversation(
+            ConversationConfig(systemInstruction = Contents.of(system), samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.2)),
+        ).use { c -> c.sendMessage(prompt).contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text } }
 }
 
 /** A conversation with Gemma that hands tool calls back to Burrow instead of running them itself. */

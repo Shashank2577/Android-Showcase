@@ -35,6 +35,7 @@ object Housekeeping {
         app.vault.wipe()
         app.mask.clear()
         app.ask.clear()
+        app.summaries.clear()
         app.ledger.clear()
         app.privacy.clear()
         if (models) {

@@ -2,7 +2,7 @@
 
 Burrow is an Android app that handles everyday jobs end to end, using small AI models that run **only on your phone**. These are jobs people usually hand to cloud apps. It's built on the [Desert Ant Labs](https://desertant.com) on-device models (`ai.desertant:*:4.2.1`), plus open speech models for Indian and other languages.
 
-The current version is **3.6**. It uses the *hand-drawn minimal* design system in [`design/burrow-a/theme`](design/burrow-a/theme/THEME.md), and is built around the product rethink in [`design/burrow-a/PRODUCT.md`](design/burrow-a/PRODUCT.md).
+The current version is **3.7**. It uses the *hand-drawn minimal* design system in [`design/burrow-a/theme`](design/burrow-a/theme/THEME.md), and is built around the product rethink in [`design/burrow-a/PRODUCT.md`](design/burrow-a/PRODUCT.md).
 
 **Contents:**
 - [Showcase](#showcase)
@@ -112,6 +112,35 @@ Uses **Eye**: scene and quality tags, faces, embeddings, `Eye.duplicates` and `E
    - **Possible follow-ups**: commitments such as "I'll send…" or "we need to…" (English phrasing);
    - **Transcript** as chat bubbles coloured per speaker; tap a line to play it, the current line lights up, and you can search inside it.
 4. **Search across every transcript**, and **share notes**, optionally with names, numbers, emails and addresses **redacted on the phone first** (Redact).
+
+### Summaries, in the language you choose
+
+With the ask model on the phone (Gemma 4 E2B, the same 2.6 GB download as ask Burrow), Burrow writes each talk and call up as soon as its notes are ready. You can also tap **summarise** on a talk. Each summary has:
+- a two- or three-sentence **gist**;
+- what was **decided**;
+- **key points**;
+- a **to-do** list: who does what, and by when.
+
+Every line carries the moment it came from; tap it to hear what was actually said. To-dos can be ticked off, and ticks are remembered.
+
+- **Language.** *Settings → summaries → write them in* picks any of 25 languages, or *each talk's own*. A Hindi call can be summarised in English, or the other way round. Any talk can also be re-summarised in another language.
+- **Dates done in code.** The model copies the words the talk used ("by Friday", "the tenth", "अगले मंगलवार"), and Burrow works out the date from the day of the talk. In testing, the model alone got most dates wrong, including dates in the past.
+- **Long talks.** Talks longer than about 40 minutes are summarised in parts, then merged. Lines that repeat each other are dropped in code.
+- **Checks.** Times outside the talk and past due dates are dropped. An unreadable answer is asked for once more.
+- **When it runs.** In the background, one model job at a time, after the speech models have freed their memory.
+- **Without the model.** Burrow keeps the earlier notes: topics, highlights and phrase-matched follow-ups.
+- **Tested with the real model** on the build machine's CPU ([`tools/ask-eval/summary-run.md`](tools/ask-eval/summary-run.md)). On a 30-minute planning meeting it found the 4 decisions (launch date, code freeze, venue, ads) and 7 to-dos with correct dates. A Hindi call was summarised well in both English and Hindi.
+  - **Its mistakes:** it sometimes credits a deadline to the wrong person (Marco's "Thursday" became Sam's "by Friday"), and Hindi output occasionally mixes in Latin letters.
+  - **Speed:** 30–80 s per talk on that CPU. Phones should be faster on their GPU, but that's not measured yet.
+
+### The brief on Today
+
+*your brief* is built from stored summaries, with no model run when you open the app:
+- **since yesterday:** each talk and call in a line, plus how many decisions and to-dos it had;
+- **due now:** overdue, today and tomorrow, with "you" on your own;
+- **this week:** what's coming up.
+
+Tap a to-do's box to tick it, or its text to open the talk. The brief only appears when there's something in it.
 
 ### Talks in Indian and other languages
 
@@ -371,7 +400,7 @@ Ask in your own words, for example "what did Priya promise?", "when is Marco sen
 | `find_person` | people you've named: their talks, calls, chat messages and topics | no |
 | `search_talks` | talks by words said, title, topic, person or date, with the matching lines | no |
 | `follow_ups` | promises and to-dos, by person, talk or date | no |
-| `talk_details` | one talk: who talked how much, topics, highlights, follow-ups | no |
+| `talk_details` | one talk: who talked how much, topics, highlights, follow-ups, and its summary when there is one | no |
 | `search_messages` | messages in chats you shared, by words, person or date | no |
 | `find_photos` | photos by what's in them (never intimate ones) | no |
 | `rename_talk` | gives a talk a new title | **yes: asks you first** |
@@ -424,6 +453,7 @@ The original concept screens are in `design/burrow-a/explorations/ask-concept-*.
 | 3.1 | UX pass: every page says what it does, what's tappable and what's next. The vault rebuilt on a biometric-bound wrapped key. Hindi talks via IndicConformer. New adaptive icon |
 | 3.2 | Talks in all 22 scheduled Indian languages, with Omnilingual for 1,600+ others. Choose a talk's language by hand. ASR evaluation in `tools/asr-eval` |
 | 3.3 | In-app light/dark setting; readable warm dark mode; five handwriting levels; more doodles; a gear on every home page; tool-calling concept |
+| 3.7 | **Summaries**: gist, decisions, key points and to-dos for every talk and call, written on the phone by Gemma, in a language you choose (25, or each talk's own), with every line linked to its moment; due dates worked out in code; **the brief** on Today. Database v5 |
 | 3.6 | Call recordings from any Android phone, not just Samsung: Android's recording flag plus every major brand's folders; file names parsed across brands and languages; *Add to Burrow* in the share sheet for any recording (iPhone files too) |
 | 3.5 | **People, connected**: link a person to their phone contact (picker, no contacts permission); call recordings linked by the name or number in the file; WhatsApp chats added through the share sheet, with who's who; call/message buttons; ask Burrow searches chats. Database v4 |
 | 3.4 | **Ask Burrow**: Gemma 4 E2B on the phone with LiteRT-LM, calling eight Burrow tools; changes need your OK; cited answers. Resumable model downloads. Kotlin 2.2. Wipe also removes downloaded language packs |
@@ -440,16 +470,16 @@ app/src/main/kotlin/com/showcase/desertant/
   ui/today, photos, meetings, people, mask, privacy, settings, onboarding, share, ask
   chats/           shared chat exports: ChatParser (WhatsApp formats), ChatImporter
   people/          voices, People, Contacts (picker + matching), CallLinks
-  ask/             ask Burrow: AskAgent (tool loop), BurrowTools, AskModel (Gemma + LiteRT-LM), AskSession
+  ask/             TalkSummarizer, TalkSummaries (+ settings), DueDates; ask Burrow: AskAgent (tool loop), BurrowTools, AskModel (Gemma + LiteRT-LM), AskSession
   ui/models/       the Model lab playgrounds
   photos/ meetings/ people/ privacy/ audio/ image/   the engines behind each job
   speech/          IndicConformer + Omnilingual: SpeechPacks, MelFeatures, CtcDecoder
   core/            ModelHub: Desert Ant model loading and downloads
-  data/            Room database (version 4) and DAOs
+  data/            Room database (version 5) and DAOs
 app/src/test/      screenshot tests (ScreenshotsTest, DarkScreenshotsTest, DesignSystemTest,
                    ExplorationTest) and unit tests (SpeechTest, VaultCryptoTest,
                    VoiceSignaturesTest, MeetingTextTest, AskAgentTest, AskLiveTest,
-                   ChatParserTest)
+                   ChatParserTest, TalkSummarizerTest, DueDatesTest, SummaryLiveTest)
 design/            design directions, briefs, the Burrow A theme, prototype and explorations
 tools/asr-eval/    the speech-model evaluation script and results
 tools/ask-eval/    the live ask Burrow run with the real model, and how to repeat it
@@ -480,7 +510,7 @@ Screenshots are rendered with Robolectric and Roborazzi in native graphics mode,
   - the ask model 2.6 GB, only if you use ask.
 - **Speed:** a few hundred photos take a few minutes. A meeting takes a fraction of its length to process once the models are on the phone.
 - **Long recordings:** up to 2 hours. Very long recordings may hit the phone's memory limit, and the app says so if that happens.
-- **Languages:** topics, highlights and follow-ups are tuned for European languages. Talks in other languages get a transcript, speakers and people, but no topics yet.
+- **Languages:** Desert Ant's topics and highlights are tuned for European languages. With the ask model, talks in any language get a summary, decisions and to-dos.
 - **Testing:** everything is verified by unit and screenshot tests, and ask Burrow with the real model on a desktop CPU. Hardware flows (fingerprint, vault, share sheet, recording, ask on a phone's GPU) need checking on a real phone.
 
 ## License

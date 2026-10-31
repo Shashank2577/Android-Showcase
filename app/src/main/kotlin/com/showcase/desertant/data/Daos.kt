@@ -106,6 +106,15 @@ interface MeetingDao {
     @Query("UPDATE meetings SET callProfileId = :profileId WHERE id = :id")
     suspend fun linkCall(id: Long, profileId: Long?)
 
+    @Query("UPDATE meetings SET summaryJson = :json WHERE id = :id")
+    suspend fun setSummary(id: Long, json: String?)
+
+    @Query("SELECT * FROM meetings WHERE status = 'READY' AND createdAt >= :since ORDER BY createdAt DESC")
+    fun readySince(since: Long): Flow<List<MeetingEntity>>
+
+    @Query("SELECT * FROM meetings WHERE summaryJson IS NOT NULL ORDER BY createdAt DESC LIMIT :limit")
+    fun summarized(limit: Int): Flow<List<MeetingEntity>>
+
     @Query("UPDATE meetings SET callProfileId = NULL WHERE callProfileId = :profileId")
     suspend fun unlinkCalls(profileId: Long)
 }

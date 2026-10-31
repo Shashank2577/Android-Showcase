@@ -385,6 +385,24 @@ fun seedSampleData(app: ShowcaseApp) = runBlocking {
                 ChatPersonEntity(chat, "Sam", me, isMe = true, messages = 2),
             ),
         )
+        // Gemma's real summary of this talk, as written (SummaryLiveTest, build/summary-sample.md), minus the point that repeated
+        // the decision (Burrow now drops those); due dates are counted from today so the brief has something to show.
+        val today = java.time.LocalDate.now()
+        val summary = com.showcase.desertant.data.TalkSummary(
+            gist = "The Q3 roadmap sync covered offline mode shipping, the no-cloud promise, budget, and next steps for hiring and venue booking. Key action items were set regarding budget submission and venue booking.",
+            points = listOf(
+                com.showcase.desertant.data.SummaryPoint("Offline mode ships in November, at the same price as today.", 300.0),
+                com.showcase.desertant.data.SummaryPoint("The no-cloud promise holds for every plan; no cloud tier; everything keeps working without signal.", 860.0),
+            ),
+            decisions = listOf(com.showcase.desertant.data.SummaryPoint("The launch budget is agreed.", 1140.0)),
+            todos = listOf(
+                com.showcase.desertant.data.SummaryTodo("send the budget", "Marco Rossi", com.showcase.desertant.ask.DueDates.resolve("Friday", today)?.toString(), 1420.0, "Friday"),
+                com.showcase.desertant.data.SummaryTodo("take the hiring plan", "Speaker 4", null, 1980.0),
+                com.showcase.desertant.data.SummaryTodo("book the launch venue", "Priya Shah", com.showcase.desertant.ask.DueDates.resolve("next week", today)?.toString(), 2260.0, "next week"),
+            ),
+            language = "English", model = "Gemma 4 E2B", writtenAt = now,
+        )
+        db.meetings().setSummary(q3, StoreJson.encodeToString(com.showcase.desertant.data.TalkSummary.serializer(), summary))
         app.ledger.add(LedgerEntry.PHOTOS_CHECKED, 312)
         app.ledger.add(LedgerEntry.TALKS_TRANSCRIBED, 1)
         app.ledger.add(LedgerEntry.TEXTS_MASKED, 2)
