@@ -2,7 +2,7 @@
 
 Burrow is an Android app that handles everyday jobs end to end, using small AI models that run **only on your phone**. These are jobs people usually hand to cloud apps. It's built on the [Desert Ant Labs](https://desertant.com) on-device models (`ai.desertant:*:4.2.1`), plus open speech models for Indian and other languages.
 
-The current version is **3.8**. It uses the *hand-drawn minimal* design system in [`design/burrow-a/theme`](design/burrow-a/theme/THEME.md), and is built around the product rethink in [`design/burrow-a/PRODUCT.md`](design/burrow-a/PRODUCT.md).
+The current version is **3.9**. It uses the *hand-drawn minimal* design system in [`design/burrow-a/theme`](design/burrow-a/theme/THEME.md), and is built around the product rethink in [`design/burrow-a/PRODUCT.md`](design/burrow-a/PRODUCT.md).
 
 **Contents:**
 - [Showcase](#showcase)
@@ -455,6 +455,7 @@ The original concept screens are in `design/burrow-a/explorations/ask-concept-*.
 | 3.3 | In-app light/dark setting; readable warm dark mode; five handwriting levels; more doodles; a gear on every home page; tool-calling concept |
 | 3.7 | **Summaries**: gist, decisions, key points and to-dos for every talk and call, written on the phone by Gemma, in a language you choose (25, or each talk's own), with every line linked to its moment; due dates worked out in code; **the brief** on Today. Database v5 |
 | 3.8 | **Shared models**: Desert Ant models, speech packs and Gemma live in the platform's shared model store, so another app of the vendor on the phone (PhoneDots) hands them over instead of downloading them again; resumable, SHA-256-checked downloads. **Logs** (settings → logs, copy all) for bug reports. Every build signed with the vendor key |
+| 3.9 | **Keeps going in the background**: while a model or speech pack downloads, or Burrow writes an answer, an ongoing notification (with progress) keeps Android from pausing it and the phone from sleeping mid-way |
 | 3.6 | Call recordings from any Android phone, not just Samsung: Android's recording flag plus every major brand's folders; file names parsed across brands and languages; *Add to Burrow* in the share sheet for any recording (iPhone files too) |
 | 3.5 | **People, connected**: link a person to their phone contact (picker, no contacts permission); call recordings linked by the name or number in the file; WhatsApp chats added through the share sheet, with who's who; call/message buttons; ask Burrow searches chats. Database v4 |
 | 3.4 | **Ask Burrow**: Gemma 4 E2B on the phone with LiteRT-LM, calling eight Burrow tools; changes need your OK; cited answers. Resumable model downloads. Kotlin 2.2. Wipe also removes downloaded language packs |

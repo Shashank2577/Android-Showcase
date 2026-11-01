@@ -231,14 +231,15 @@ class ModelHub(
             withContext(Dispatchers.IO) {
                 // The store copies the folder from a sibling app when one has it,
                 // then the SDK downloads only if its weights still aren't there.
-                store.ensure(id, cancel = signal, sdkInstall = { _, _ ->
+                // An ongoing notification keeps the download going if Burrow is left.
+                dev.baseplatform.base_models.KeepAwake.during(context, "model:$id", "getting ${kind.title}") { _ -> store.ensure(id, cancel = signal, sdkInstall = { _, _ ->
                     if (!isDownloaded(kind)) {
                         if (store.isOffline()) throw OfflineException(kind)
                         log("$id: the Desert Ant SDK is downloading it")
                         runBlocking { download(kind) }
                         log("$id: SDK download finished")
                     }
-                })
+                }) }
             }
             set(kind, ModelStatus.Ready)
         } catch (e: CancellationException) {

@@ -117,7 +117,10 @@ object AskModel {
             val cancel = dev.baseplatform.base_models.CancelSignal().also { signal = it }
             try {
                 // A sibling app's copy (PhoneDots) if it has it, else a resumable, verified download.
-                app.models.ensure(STORE_ID, progress = { p -> _state.value = State.Downloading((p * 100).toInt()) }, cancel = cancel)
+                // An ongoing notification keeps the 2.6 GB download going if Burrow is left.
+                dev.baseplatform.base_models.KeepAwake.during(context, "model:$STORE_ID", "getting $NAME") { update ->
+                    app.models.ensure(STORE_ID, progress = { p -> update(p); _state.value = State.Downloading((p * 100).toInt()) }, cancel = cancel)
+                }
                 preStoreFile(context).parentFile?.deleteRecursively() // A stale copy from before the store.
                 _state.value = State.Ready
             } catch (e: CancellationException) {

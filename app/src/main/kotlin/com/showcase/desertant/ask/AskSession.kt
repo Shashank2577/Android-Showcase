@@ -51,6 +51,8 @@ class AskSession(private val context: Context) {
         val app = context.app
         _ui.value = AskUi(question = q, phase = AskUi.Phase.LOADING)
         job = app.scope.launch {
+            // Loading Gemma and answering take a while: an ongoing notification keeps Burrow going.
+            dev.baseplatform.base_models.KeepAwake.begin(context, "answer", "writing an answer", dev.baseplatform.base_models.KeepAwake.Kind.AI)
             try {
                 val engine = AskModel.engine(context)
                 _ui.update { it.copy(phase = AskUi.Phase.THINKING) }
@@ -77,6 +79,8 @@ class AskSession(private val context: Context) {
             } catch (e: Throwable) {
                 // Native errors from the model runtime included: show them, don't crash.
                 _ui.update { it.copy(phase = AskUi.Phase.FAILED, pending = null, error = e.message ?: e.javaClass.simpleName) }
+            } finally {
+                dev.baseplatform.base_models.KeepAwake.end(context, "answer")
             }
         }
     }

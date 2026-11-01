@@ -195,7 +195,10 @@ object SpeechPacks {
             val signal = dev.baseplatform.base_models.CancelSignal().also { signals[pack.code] = it }
             try {
                 // A sibling app's copy if one has it, else a resumable, verified download.
-                app.models.ensure(storeId(pack), progress = { p -> set(pack.code, State.Downloading((p * 100).toInt())) }, cancel = signal)
+                // An ongoing notification keeps the download going if Burrow is left.
+                dev.baseplatform.base_models.KeepAwake.during(context, "model:${storeId(pack)}", "getting the ${pack.name} speech pack") { update ->
+                    app.models.ensure(storeId(pack), progress = { p -> update(p); set(pack.code, State.Downloading((p * 100).toInt())) }, cancel = signal)
+                }
                 preStoreDir(context, pack).deleteRecursively() // A stale copy from before the store, if one was left.
                 set(pack.code, State.Ready)
             } catch (e: CancellationException) {
