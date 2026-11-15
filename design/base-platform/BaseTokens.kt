@@ -6,40 +6,57 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 object BaseTokens {
-    const val VERSION = "1.0.0"
+    const val VERSION = "2.0.0"
     object Light {
         val paper = Color(0xFFFFFFFF)
         val ink = Color(0xFF1A1A1A)
-        val pencil = Color(0xFF6B6B6B)
-        val graphite = Color(0xFFA3A3A3)
-        val rule = Color(0x261A1A1A)
+        val pencil = Color(0xFF555555)
+        val graphite = Color(0xFF6B6B6B)
+        val rule = Color(0x331A1A1A)
         val smudge = Color(0xFFF4F3EF)
         val marker = Color(0xFFFFE45C)
         val markerInk = Color(0xFF1A1A1A)
-        val redPen = Color(0xFFDC2626)
+        val redPen = Color(0xFFC81E1E)
     }
     object Dark {
         val paper = Color(0xFF1E1D1B)
         val ink = Color(0xFFE8E3D8)
         val pencil = Color(0xFFB9B3A8)
-        val graphite = Color(0xFF948E84)
-        val rule = Color(0x4DE8E3D8)
+        val graphite = Color(0xFFA39D92)
+        val rule = Color(0x59E8E3D8)
         val smudge = Color(0xFF2D2B28)
         val marker = Color(0xFFD9BF45)
         val markerInk = Color(0xFF1E1D1B)
         val redPen = Color(0xFFFF8A80)
     }
     val series = listOf(Color(0xFF1A1A1A), Color(0xFF8A6D1F), Color(0xFF3E6B5A), Color(0xFF7A4A6B), Color(0xFF4A5E85), Color(0xFF9A4B3C), Color(0xFF5F6B2E), Color(0xFF6B6B6B))
+    val seriesDark = listOf(Color(0xFFE8E3D8), Color(0xFFBD9834), Color(0xFF6EA691), Color(0xFFB890AC), Color(0xFF8E9DBC), Color(0xFFC98E82), Color(0xFF92A34D), Color(0xFF9B9B9B))
     object Space {
         val xs = 4.0.dp
         val s = 8.0.dp
+        val sm = 12.0.dp
         val m = 16.0.dp
         val l = 24.0.dp
         val xl = 40.0.dp
         val xxl = 64.0.dp
         val gutter = 24.0.dp
         val maxColumn = 560.0.dp
-        val twoPaneBreakpoint = 700.0.dp
+        val readingColumn = 600.0.dp
+        val listPane = 360.0.dp
+        val railWidth = 200.0.dp
+        val twoPaneBreakpoint = 840.0.dp
+        val railBreakpoint = 1000.0.dp
+    }
+    object Size {
+        val minTap = 48.0.dp
+        val minText = 13.0.dp
+        val minHand = 24.0.dp
+        val inkButton = 56.0.dp
+        val pill = 48.0.dp
+        val field = 52.0.dp
+        val icon = 24.0.dp
+        val iconSmall = 20.0.dp
+        val row = 56.0.dp
     }
     object Radius {
         val pill = 999.0.dp
@@ -57,6 +74,11 @@ object BaseTokens {
         val progressTrack = 2.0.dp
         val progressInk = 3.0.dp
     }
+    object Font {
+        const val HAND = "Caveat"
+        const val MONO = "monospace"
+        val monoFallback = listOf("Menlo", "SF Mono", "Roboto Mono", "Consolas", "DejaVu Sans Mono", "Courier New")
+    }
     object Motion {
         const val quick = 150
         const val toggle = 220
@@ -66,17 +88,20 @@ object BaseTokens {
         const val draw = 600
     }
     object HandType {
-        val displaySize = 52.0.sp; val displayLine = 54.0.sp; const val displayWeight = 700
-        val headlineSize = 40.0.sp; val headlineLine = 42.0.sp; const val headlineWeight = 700
-        val titleSize = 30.0.sp; val titleLine = 33.0.sp; const val titleWeight = 700
-        val doorSize = 26.0.sp; val doorLine = 30.0.sp; const val doorWeight = 600
-        val labelSize = 21.0.sp; val labelLine = 24.0.sp; const val labelWeight = 600
-        val smallSize = 18.0.sp; val smallLine = 21.0.sp; const val smallWeight = 600
+        val displaySize = 52.0.sp; val displayLine = 58.0.sp; const val displayWeight = 700
+        val headlineSize = 38.0.sp; val headlineLine = 42.0.sp; const val headlineWeight = 700
+        val titleSize = 30.0.sp; val titleLine = 34.0.sp; const val titleWeight = 700
+        val doorSize = 24.0.sp; val doorLine = 28.0.sp; const val doorWeight = 600
+        val labelSize = 24.0.sp; val labelLine = 28.0.sp; const val labelWeight = 600
     }
     object BodyType {
-        val bodyLargeSize = 16.0.sp; val bodyLargeLine = 23.0.sp; const val bodyLargeWeight = 400
-        val bodySize = 15.0.sp; val bodyLine = 22.0.sp; const val bodyWeight = 400
-        val metaSize = 13.0.sp; val metaLine = 18.0.sp; const val metaWeight = 400
-        val monoSize = 12.0.sp; val monoLine = 16.0.sp; const val monoWeight = 400
+        val contentTitleSize = 22.0.sp; val contentTitleLine = 28.0.sp; const val contentTitleWeight = 600
+        val readingSize = 17.0.sp; val readingLine = 26.0.sp; const val readingWeight = 400
+        val rowTitleSize = 17.0.sp; val rowTitleLine = 24.0.sp; const val rowTitleWeight = 600
+        val bodySize = 16.0.sp; val bodyLine = 24.0.sp; const val bodyWeight = 400
+        val metaSize = 14.0.sp; val metaLine = 20.0.sp; const val metaWeight = 400
+        val captionSize = 13.0.sp; val captionLine = 18.0.sp; const val captionWeight = 400
+        val tagSize = 13.0.sp; val tagLine = 18.0.sp; const val tagWeight = 600
+        val monoSize = 13.0.sp; val monoLine = 20.0.sp; const val monoWeight = 400
     }
 }
