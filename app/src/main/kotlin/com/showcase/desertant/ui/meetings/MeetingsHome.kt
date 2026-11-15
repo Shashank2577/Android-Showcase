@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -48,7 +49,15 @@ import com.showcase.desertant.meetings.RecorderService
 import com.showcase.desertant.meetings.RecorderState
 import com.showcase.desertant.speech.SpeechPacks
 import com.showcase.desertant.ui.common.dateTime
+import com.showcase.desertant.ui.hand.Caption
 import com.showcase.desertant.ui.hand.Doodle
+import com.showcase.desertant.ui.hand.HandLink
+import com.showcase.desertant.ui.hand.HandProgress
+import com.showcase.desertant.ui.hand.HandSheet
+import com.showcase.desertant.ui.hand.InkButton
+import com.showcase.desertant.ui.hand.ItemRow
+import com.showcase.desertant.ui.hand.ListPane
+import com.showcase.desertant.ui.hand.SheetTitle
 import com.showcase.desertant.ui.hand.DoodleButton
 import com.showcase.desertant.ui.hand.DoodleIcon
 import com.showcase.desertant.ui.hand.HandDivider
@@ -64,7 +73,11 @@ import com.showcase.desertant.ui.theme.Hand
 import com.showcase.desertant.ui.theme.burrow
 import kotlinx.coroutines.launch
 
-/** Talks: a big record button, search across everything said, and the list. */
+/**
+ * Talks. Its job: find a talk, or start one. One sentence, search across
+ * everything said, the list newest first; "import" in the top row opens a
+ * sheet (a file, a call, a chat); the one ink pill records.
+ */
 @Composable
 fun MeetingsHome(open: (String) -> Unit) {
     val context = LocalContext.current
@@ -78,6 +91,7 @@ fun MeetingsHome(open: (String) -> Unit) {
     val recorder by RecorderService.state.collectAsState()
     val wide = LocalWideLayout.current
     var selected by rememberSaveable { mutableStateOf<Long?>(null) }
+    var importing by remember { mutableStateOf(false) }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
@@ -89,34 +103,36 @@ fun MeetingsHome(open: (String) -> Unit) {
             }
         }
     }
+    val recording = recorder as? RecorderState.Recording
 
     val list = @Composable {
-        HandPage(topEnd = { DoodleButton(Doodle.GEAR, "Settings", { open("settings") }); DoodleButton(Doodle.LOCK, "Privacy", { open("privacy") }) }) {
-            Row(verticalAlignment = Alignment.Top) {
-                PageIntro(
-                    "talks",
-                    "Record a meeting, a lecture or a call. Burrow writes the notes — who said what, the topics, the to-dos — on this phone.",
-                    Modifier.weight(1f),
+        HandPage(
+            topEnd = {
+                HandLink("import", { importing = true })
+                DoodleButton(Doodle.GEAR, "Settings", { open("settings") })
+                DoodleButton(Doodle.LOCK, "Privacy", { open("privacy") })
+            },
+            bottom = {
+                InkButton(
+                    if (recording != null) "recording · ${formatClock(recording.elapsedMs / 1000.0)}" else "record",
+                    { open("record") },
+                    Modifier.widthIn(max = if (wide) 320.dp else 400.dp).fillMaxWidth(),
+                    trailing = if (recording != null) Doodle.WAVE else Doodle.MIC,
                 )
-                Spacer(Modifier.width(12.dp))
-                RecordButton(recorder as? RecorderState.Recording) { open("record") }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PillButton("import a call", { open("recordings") }, leading = Doodle.PHONE)
-                PillButton("import a file", { picker.launch(arrayOf("audio/*", "video/*")) }, leading = Doodle.PLUS)
-            }
-            Spacer(Modifier.height(14.dp))
+            },
+        ) {
+            PageIntro("talks", "Everything you recorded, with notes.")
             if (meetings.orEmpty().isNotEmpty() || query.isNotBlank()) {
-                HandField(query, { query = it }, placeholder = "search everything that was said…", singleLine = true, leading = Doodle.SEARCH)
+                HandField(query, { query = it }, placeholder = "search what was said", singleLine = true, leading = Doodle.SEARCH)
                 Spacer(Modifier.height(8.dp))
             }
             val m = meetings
             if (m != null && m.isEmpty()) {
                 if (query.isBlank()) HandEmpty(
-                    "your conversations, understood.",
-                    "Record a meeting or bring in a call. Burrow writes the notes, works out who said what and pulls out the follow-ups — on the phone.",
+                    "your talks, understood.",
+                    "Record a meeting or bring in a call. Burrow writes the notes, works out who said what and pulls out the to-dos, on this phone.",
                     doodle = Doodle.MIC,
-                ) else HandEmpty("no talk mentions “$query”.", "Search looks through every transcript on this phone.", doodle = Doodle.SEARCH)
+                ) else HandEmpty("nothing found", "No talk mentions “$query”. Search looks through every transcript on this phone.", doodle = Doodle.SEARCH)
             }
             m.orEmpty().forEachIndexed { n, meeting ->
                 if (n > 0) HandDivider(seed = n)
@@ -124,7 +140,7 @@ fun MeetingsHome(open: (String) -> Unit) {
                     meeting,
                     people = speakers.filter { it.meetingId == meeting.id }.mapNotNull { s -> profiles.firstOrNull { it.id == s.profileId } }.distinctBy { it.id },
                     highlight = query.takeIf { it.isNotBlank() },
-                    selected = wide && selected == meeting.id,
+                    selected = wide && (selected ?: meetings?.firstOrNull()?.id) == meeting.id,
                 ) { if (wide) selected = meeting.id else open("meeting/${meeting.id}") }
             }
         }
@@ -132,8 +148,8 @@ fun MeetingsHome(open: (String) -> Unit) {
 
     if (wide) {
         Row(Modifier.fillMaxSize()) {
-            Box(Modifier.weight(0.42f).fillMaxHeight()) { list() }
-            Box(Modifier.weight(0.58f).fillMaxHeight().background(burrow.paper)) {
+            Box(Modifier.width(ListPane).fillMaxHeight()) { list() }
+            Box(Modifier.weight(1f).fillMaxHeight().background(burrow.paper)) {
                 val id = selected ?: meetings?.firstOrNull()?.id
                 if (id != null) MeetingDetailContent(id, open = open, embedded = true)
                 else HandEmpty("pick a talk", "Its notes open here.", Modifier.padding(top = 80.dp))
@@ -142,25 +158,27 @@ fun MeetingsHome(open: (String) -> Unit) {
     } else {
         list()
     }
-}
 
-@Composable
-private fun RecordButton(recording: RecorderState.Recording?, onClick: () -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            Modifier
-                .size(72.dp)
-                .clip(CircleShape)
-                .background(if (recording != null) burrow.redPen else burrow.ink)
-                .clickable(role = Role.Button, onClick = onClick),
-            contentAlignment = Alignment.Center,
-        ) {
-            DoodleIcon(if (recording != null) Doodle.WAVE else Doodle.MIC, if (recording != null) "Recording" else "Record", size = 34.dp, color = burrow.paper, stroke = 2.4.dp)
+    if (importing) {
+        HandSheet({ importing = false }) {
+            SheetTitle("bring a talk in")
+            ItemRow(
+                "A recording file", meta = "Any audio or video file on this phone.",
+                onClick = { importing = false; picker.launch(arrayOf("audio/*", "video/*")) },
+                leading = { DoodleIcon(Doodle.PLUS, null, size = 24.dp) },
+            )
+            ItemRow(
+                "A phone call", meta = "Recordings your phone app made. Burrow finds them for you.",
+                onClick = { importing = false; open("recordings") },
+                leading = { DoodleIcon(Doodle.PHONE, null, size = 24.dp) },
+            )
+            ItemRow(
+                "A chat export", meta = "In WhatsApp, open a chat, then ⋮ → More → Export chat → Burrow. It lands on that person's page.",
+                leading = { DoodleIcon(Doodle.BUBBLE, null, size = 24.dp) },
+                metaLines = 3,
+            )
+            Caption("You can also share any recording to Burrow from another app.")
         }
-        Text(
-            if (recording != null) formatClock(recording.elapsedMs / 1000.0) else "record",
-            style = Hand.small, color = burrow.ink, modifier = Modifier.padding(top = 4.dp),
-        )
     }
 }
 
@@ -168,52 +186,33 @@ private fun RecordButton(recording: RecorderState.Recording?, onClick: () -> Uni
 private fun TalkRow(meeting: MeetingEntity, people: List<ProfileEntity>, highlight: String?, selected: Boolean, onClick: () -> Unit) {
     val context = LocalContext.current
     val topics = remember(meeting.topicsJson) { decodeTopics(meeting.topicsJson) }
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .then(if (selected) Modifier.background(burrow.smudge) else Modifier)
-            .clickable(onClick = onClick)
-            .padding(vertical = 14.dp, horizontal = 4.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (meeting.source == MeetingSource.CALL) {
-                DoodleIcon(Doodle.PHONE, "Call", size = 18.dp)
-                Spacer(Modifier.width(6.dp))
-            }
-            Text(meeting.title, style = Hand.door, color = burrow.ink, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            DoodleIcon(Doodle.ARROW, "Open", size = 22.dp, color = burrow.pencil)
-        }
-        Meta(
-            buildString {
-                append(dateTime(context, meeting.createdAt))
-                if (meeting.durationSec > 0) append(" · ${formatClock(meeting.durationSec)}")
-                val names = people.map { if (it.isMe) "you" else it.name.substringBefore(' ') }
-                if (names.isNotEmpty()) append(" · ${names.joinToString(", ")}")
-                else if (meeting.speakerCount > 0) append(" · ${meeting.speakerCount} voices")
-            },
-        )
-        when (meeting.status) {
-            MeetingStatus.READY -> {
-                if (topics.isNotEmpty()) {
-                    val words = topics.take(3).joinToString("  ·  ") { it.name.lowercase() }
-                    MarkedText(words, Modifier.padding(top = 4.dp), mark = topics.first().name.lowercase(), style = Hand.small)
-                }
-                if (highlight != null) {
-                    snippet(meeting.transcriptText, highlight)?.let { Meta("…$it…", Modifier.padding(top = 4.dp), color = burrow.ink, maxLines = 2) }
-                }
-            }
-            MeetingStatus.FAILED -> SpeechPacks.route(meeting.language)?.takeIf { meeting.languageSupported == false }?.let { _ ->
-                val name = languageName(meeting.language).substringBefore(" (")
-                Meta("in $name — open it to get $name and write its notes", Modifier.padding(top = 4.dp), color = burrow.ink)
-            } ?: Meta("couldn't finish — open it to try again", Modifier.padding(top = 4.dp), color = burrow.redPen)
-            else -> Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 1.5.dp, color = burrow.ink)
-                Spacer(Modifier.width(8.dp))
-                Meta(if (meeting.status == MeetingStatus.RECORDING) "recording…" else meeting.progress?.lowercase() ?: "waiting to be written up")
-            }
-        }
+    val writing = meeting.status == MeetingStatus.QUEUED || meeting.status == MeetingStatus.PROCESSING || meeting.status == MeetingStatus.RECORDING
+    val meta = buildString {
+        append(talkDate(context, meeting.createdAt))
+        if (meeting.durationSec > 0) append(" · ${(meeting.durationSec / 60).toInt().coerceAtLeast(1)} min")
+        val names = people.map { if (it.isMe) "you" else it.name.substringBefore(' ') }
+        if (names.isNotEmpty()) append(" · ${names.joinToString(", ")}")
+        else if (meeting.speakerCount > 0) append(" · ${meeting.speakerCount} voices")
     }
+    val caption = when (meeting.status) {
+        MeetingStatus.READY -> highlight?.let { h -> snippet(meeting.transcriptText, h)?.let { "…$it…" } }
+            ?: topics.take(3).takeIf { it.isNotEmpty() }?.joinToString(" · ") { it.name.lowercase() }
+        MeetingStatus.FAILED -> SpeechPacks.route(meeting.language)?.takeIf { meeting.languageSupported == false }?.let { _ ->
+            val name = languageName(meeting.language).substringBefore(" (")
+            "In $name. Open it to get $name and write its notes."
+        } ?: "Couldn't finish. Open it to try again."
+        MeetingStatus.RECORDING -> "Recording…"
+        else -> meeting.progress ?: "Waiting to be written up"
+    }
+    ItemRow(
+        meeting.title,
+        meta = meta,
+        caption = caption,
+        onClick = onClick,
+        selected = selected,
+        leading = if (meeting.source == MeetingSource.CALL) ({ DoodleIcon(Doodle.PHONE, "Call", size = 24.dp, color = burrow.pencil) }) else null,
+        below = if (writing) ({ HandProgress(null, Modifier.padding(top = 6.dp)) }) else null,
+    )
 }
 
 private fun snippet(text: String, query: String): String? {

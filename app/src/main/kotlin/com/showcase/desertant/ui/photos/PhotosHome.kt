@@ -53,6 +53,11 @@ import com.showcase.desertant.ui.common.Thumbnail
 import com.showcase.desertant.ui.common.formatBytes
 import com.showcase.desertant.ui.components.prettify
 import com.showcase.desertant.ui.hand.Body
+import com.showcase.desertant.ui.hand.Caption
+import com.showcase.desertant.ui.hand.ChoicePill
+import com.showcase.desertant.ui.hand.DoodleIcon
+import com.showcase.desertant.ui.hand.HandDivider
+import com.showcase.desertant.ui.hand.ItemRow
 import com.showcase.desertant.ui.hand.Doodle
 import com.showcase.desertant.ui.hand.DoodleButton
 import com.showcase.desertant.ui.hand.Door
@@ -81,7 +86,7 @@ fun photoPermissions(): Array<String> = when {
 }
 
 @Composable
-fun PhotosHome(open: (String) -> Unit) {
+fun PhotosHome(onBack: () -> Unit, open: (String) -> Unit) {
     val context = LocalContext.current
     val app = context.app
     val insights by app.photoInsights.collectAsStateWithLifecycle()
@@ -111,82 +116,83 @@ fun PhotosHome(open: (String) -> Unit) {
         PhotoScanWorker.start(context, PhotoScope(album?.id, album?.name, days))
     }
 
-    HandPage(topEnd = { DoodleButton(Doodle.GEAR, "Settings", { open("settings") }); DoodleButton(Doodle.LOCK, "Privacy", { open("privacy") }) }) {
-        PageIntro("photos", "Free up space and keep private photos out of sight. Burrow checks them on this phone; nothing is uploaded.", doodle = Doodle.CAMERA)
+    HandPage(onBack = onBack) {
+        PageIntro("photos", "Free up space and keep private photos out of sight, checked on this phone.", doodle = Doodle.CAMERA)
 
         if (!granted) {
             Steps(listOf("Let Burrow see your photos", "It looks through them, on the phone", "You decide what to let go and what to lock away"), current = 0)
             Spacer(Modifier.height(20.dp))
-            InkButton("let Burrow see your photos", { permission.launch(photoPermissions()) }, Modifier.fillMaxWidth())
+            InkButton("let Burrow see them", { permission.launch(photoPermissions()) }, Modifier.fillMaxWidth())
             Spacer(Modifier.height(24.dp))
-            Door("the vault — ${app.vault.count}", { open("vault") }, meta = "your encrypted, fingerprint-locked photos")
+            Door("the vault", { open("vault") }, meta = vaultMeta(app.vault.count), leading = { DoodleIcon(Doodle.LOCK, null, size = 24.dp) })
             return@HandPage
         }
 
         // What's happening right now comes first.
         if (running != null) {
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(burrow.smudge).padding(16.dp)) {
-                Text("looking through your photos…", style = Hand.door, color = burrow.ink)
-                Meta(if (total > 0) "$done of $total checked · you can leave the app, it keeps going" else "getting ready…")
-                Spacer(Modifier.height(8.dp))
-                HandProgress(if (total > 0) done.toFloat() / total else null)
-                PillButton("stop", { PhotoScanWorker.cancel(context) }, Modifier.padding(top = 8.dp), leading = Doodle.STOP)
-            }
+            Body("Looking through your photos…")
+            Caption(if (total > 0) "$done of $total checked. You can leave the app; it keeps going." else "Getting ready…")
+            HandProgress(if (total > 0) done.toFloat() / total else null, Modifier.padding(vertical = 6.dp))
+            PillButton("stop", { PhotoScanWorker.cancel(context) }, leading = Doodle.STOP)
             Spacer(Modifier.height(18.dp))
         }
 
         if (!scanned) {
             if (running == null) {
-                Body("Burrow hasn't looked through your photos yet. Pick how far back to go, then start.", color = burrow.ink)
+                Body("Burrow hasn't looked through your photos yet. Pick how far back to go, then start.")
                 Spacer(Modifier.height(10.dp))
                 ScanChoices(albums, album, { album = it }, days) { days = it }
                 InkButton(scanLabel(days), startScan, Modifier.fillMaxWidth().padding(top = 8.dp))
-                Meta("A few hundred photos take a couple of minutes.", Modifier.padding(top = 8.dp))
+                Caption("A few hundred photos take a couple of minutes.", Modifier.padding(top = 8.dp))
             }
             Spacer(Modifier.height(24.dp))
-            Door("the vault — ${app.vault.count}", { open("vault") }, meta = "your encrypted, fingerprint-locked photos")
+            Door("the vault", { open("vault") }, meta = vaultMeta(app.vault.count), leading = { DoodleIcon(Doodle.LOCK, null, size = 24.dp) })
             return@HandPage
         }
 
         val reclaim = i!!.duplicateBytes + i.junkBytes
-        SectionHead("free up space", note = if (reclaim > 0) formatBytes(context, reclaim) + " to free" else "all tidy")
-        Door(
-            "keep the best of each moment", if (i.groups.isEmpty()) null else ({ open("photos/review/${ReviewKind.SIMILAR.name}") }),
-            meta = if (i.groups.isEmpty()) "no bursts or retakes found" else "${i.groups.size} moments with ${i.duplicateCount} extra takes · ${formatBytes(context, i.duplicateBytes)}",
-            mark = if (reclaim > 0 && i.groups.isNotEmpty()) "best" else null,
+        val reclaimText = formatBytes(context, reclaim)
+        SectionHead("tidy up", note = if (reclaim > 0) "$reclaimText you can free." else "All tidy.", first = true)
+        if (i.groups.isNotEmpty()) {
+            ItemRow(
+                "Keep the best of each moment",
+                meta = "${i.groups.size} moments with ${i.duplicateCount} extra takes · ${formatBytes(context, i.duplicateBytes)}",
+                onClick = { open("photos/review/${ReviewKind.SIMILAR.name}") },
+            )
+            Previews(i.groups.take(5).map { it.best })
+        }
+        if (i.junk.isNotEmpty()) ItemRow(
+            "Throwaway shots",
+            meta = "${i.junk.size} blurry, accidental or empty · ${formatBytes(context, i.junkBytes)}",
+            onClick = { open("photos/review/${ReviewKind.JUNK.name}") },
         )
-        Previews(i.groups.take(5).map { it.best })
-        Door(
-            "throwaway shots", if (i.junk.isEmpty()) null else ({ open("photos/review/${ReviewKind.JUNK.name}") }),
-            meta = if (i.junk.isEmpty()) "nothing blurry or accidental" else "${i.junk.size} blurry, accidental or empty · ${formatBytes(context, i.junkBytes)}",
+        if (i.screenshots.isNotEmpty()) ItemRow(
+            "Old screenshots",
+            meta = "${i.screenshots.size} screenshots · ${formatBytes(context, i.screenshotBytes)}",
+            onClick = { open("photos/review/${ReviewKind.SCREENSHOTS.name}") },
         )
-        Door(
-            "old screenshots", if (i.screenshots.isEmpty()) null else ({ open("photos/review/${ReviewKind.SCREENSHOTS.name}") }),
-            meta = if (i.screenshots.isEmpty()) "none found" else "${i.screenshots.size} screenshots · ${formatBytes(context, i.screenshotBytes)}",
-        )
+        if (i.groups.isEmpty() && i.junk.isEmpty() && i.screenshots.isEmpty()) Body("No bursts, retakes, blurry shots or old screenshots found.", color = burrow.pencil)
 
         Spacer(Modifier.height(16.dp))
-        SectionHead("keep private things private")
+        HandDivider(seed = 7)
         Door(
-            if (i.privateCount == 0) "no private photos in plain sight" else "${i.privateCount} private photos in plain sight",
+            "private sweep",
             if (i.privateCount == 0) null else ({ open("sweep") }),
             alert = i.privateCount > 0,
-            meta = if (i.privateCount == 0) "no IDs, cards, medical or intimate photos found" else "IDs, cards and more · move them to the vault",
+            meta = if (i.privateCount == 0) "No IDs, cards, medical or intimate photos in plain sight." else "${i.privateCount} private photos in plain sight. Move them to the vault.",
+            leading = { DoodleIcon(Doodle.EYE_OFF, null, size = 24.dp) },
         )
         if (i.privateCount > 0) Previews(i.private.values.flatten().take(5), blurred = true)
-        Door("the vault — ${app.vault.count}", { open("vault") }, meta = "encrypted on this phone, opens with your fingerprint")
+        Door("the vault", { open("vault") }, meta = vaultMeta(app.vault.count), leading = { DoodleIcon(Doodle.LOCK, null, size = 24.dp) })
 
-        Spacer(Modifier.height(16.dp))
-        SectionHead("look through more", note = "${i.analyzed} checked")
+        SectionHead("look through more", note = "${i.analyzed} checked. Photos already checked are skipped, so this is quick.")
         if (running == null) {
-            Meta("Photos already checked are skipped, so this is quick.")
             ScanChoices(albums, album, { album = it }, days) { days = it }
             PillButton(scanLabel(days), startScan, Modifier.padding(top = 4.dp), leading = Doodle.SEARCH)
         } else {
-            Meta("A look-through is running — see the top of the page.")
+            Body("A look-through is running; see the top of the page.", color = burrow.pencil)
         }
 
-        Spacer(Modifier.height(24.dp))
         Find(i)
     }
 }
@@ -200,9 +206,11 @@ private fun ScanChoices(albums: List<Album>, album: Album?, onAlbum: (Album?) ->
         AlbumPicker(albums, album, onAlbum)
     }
     FlowRow(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        PERIODS.forEach { (d, label) -> HandTag(label, marked = days == d, onClick = { onDays(d) }) }
+        PERIODS.forEach { (d, label) -> ChoicePill(label, days == d, { onDays(d) }) }
     }
 }
+
+private fun vaultMeta(count: Int) = if (count == 0) "Encrypted on this phone, opens with your fingerprint." else "$count photos, encrypted on this phone, open with your fingerprint."
 
 @Composable
 private fun Previews(photos: List<PhotoEntity>, blurred: Boolean = false) {
@@ -220,7 +228,7 @@ private fun Previews(photos: List<PhotoEntity>, blurred: Boolean = false) {
 private fun AlbumPicker(albums: List<Album>, album: Album?, onAlbum: (Album?) -> Unit) {
     var menu by remember { mutableStateOf(false) }
     Box {
-        PillButton(album?.let { "${it.name.lowercase()} (${it.count}) ▾" } ?: "all albums ▾", { menu = true })
+        PillButton(album?.let { "${it.name} (${it.count}) ▾" } ?: "all albums ▾", { menu = true })
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
             DropdownMenuItem(text = { Text("All albums") }, onClick = { onAlbum(null); menu = false })
             albums.forEach { a -> DropdownMenuItem(text = { Text("${a.name} (${a.count})") }, onClick = { onAlbum(a); menu = false }) }
@@ -237,9 +245,7 @@ private fun Find(insights: PhotoInsights) {
     var query by rememberSaveable { mutableStateOf("") }
     val results = remember(query, insights) { insights.search(query) }
     var preview by remember { mutableStateOf<PhotoEntity?>(null) }
-    SectionHead("find a photo")
-    Meta("Search by what's in it. Tap a word below, or type your own.")
-    Spacer(Modifier.height(8.dp))
+    SectionHead("find a photo", note = "Search by what's in it. Tap a word below, or type your own.")
     HandField(query, { query = it }, placeholder = "dog, beach, receipt, smiling…", singleLine = true, leading = Doodle.SEARCH)
     Spacer(Modifier.height(10.dp))
     if (query.isBlank()) {
@@ -247,7 +253,7 @@ private fun Find(insights: PhotoInsights) {
             insights.topTags.take(14).forEach { (tag, n) -> HandTag("${prettify(tag).lowercase()} $n", onClick = { query = tag }) }
         }
     } else {
-        Meta("${results.size} photos")
+        Caption("${results.size} photos")
         Spacer(Modifier.height(8.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             results.take(60).forEach { p -> Thumbnail(p.uri, Modifier.size(84.dp).clickable { preview = p }) }

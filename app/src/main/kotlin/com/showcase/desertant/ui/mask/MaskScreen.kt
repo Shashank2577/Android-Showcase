@@ -38,7 +38,16 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.showcase.desertant.app
 import com.showcase.desertant.core.languageName
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.draw.clip
+import com.showcase.desertant.ui.hand.Body
+import com.showcase.desertant.ui.hand.Caption
 import com.showcase.desertant.ui.hand.Doodle
+import com.showcase.desertant.ui.hand.MarkedText
+import com.showcase.desertant.ui.hand.Warning
+import com.showcase.desertant.ui.theme.Mono
 import com.showcase.desertant.ui.hand.DoodleIcon
 import com.showcase.desertant.ui.hand.HandField
 import com.showcase.desertant.ui.hand.HandLink
@@ -52,6 +61,7 @@ import com.showcase.desertant.ui.hand.StepHead
 import com.showcase.desertant.ui.privacy.SecureScreen
 import com.showcase.desertant.ui.theme.Hand
 import com.showcase.desertant.ui.theme.bodyStyle
+import com.showcase.desertant.ui.theme.Type
 import com.showcase.desertant.ui.theme.burrow
 import kotlinx.coroutines.launch
 
@@ -76,101 +86,112 @@ fun MaskScreen(onBack: (() -> Unit)?, initial: String = "", onReplace: ((String)
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val masked by session.current.collectAsState()
+    var stage by rememberSaveable { mutableIntStateOf(1) }
     val ink = burrow.ink
-    val marker = burrow.marker
-    val markerInk = burrow.markerInk
+    val chip = burrow.paper
 
     fun maskNow() = scope.launch {
         busy = true
         error = null
-        runCatching { session.mask(text) }.onFailure { error = it.message ?: "Couldn't mask this" }
+        runCatching { session.mask(text) }
+            .onSuccess { stage = 2 }
+            .onFailure { error = it.message ?: "Couldn't mask this" }
         busy = false
     }
 
     val current = masked?.takeIf { it.original == text }
-    HandPage(onBack = onBack, topEnd = { OnDeviceStamp(Modifier.padding(end = 12.dp)) }) {
+    val restored = if (current != null && reply.isNotBlank()) session.restore(reply) else null
+    val open = if (current == null) 1 else stage
+    HandPage(
+        onBack = onBack,
+        topEnd = { OnDeviceStamp(Modifier.padding(end = 12.dp)) },
+        bottom = {
+            val wide = Modifier.widthIn(max = 400.dp).fillMaxWidth()
+            when (open) {
+                1 -> InkButton("mask it", ::maskNow, wide, enabled = text.isNotBlank(), busy = busy)
+                2 -> InkButton(
+                    if (onReplace != null) "put the masked text back" else "copy masked text",
+                    {
+                        val c = current ?: return@InkButton
+                        if (onReplace != null) onReplace(c.text)
+                        else {
+                            copy(context, c.text, sensitive = false)
+                            Toast.makeText(context, "Copied. Paste it into the AI, then bring its reply back here.", Toast.LENGTH_LONG).show()
+                            stage = 3
+                        }
+                    },
+                    wide, trailing = Doodle.ARROW,
+                )
+                else -> InkButton("copy the restored reply", {
+                    restored?.let {
+                        copy(context, it, sensitive = true)
+                        Toast.makeText(context, "Copied, marked as sensitive.", Toast.LENGTH_SHORT).show()
+                    }
+                }, wide, enabled = restored != null)
+            }
+        },
+    ) {
         PageIntro(
-            "mask a message.",
-            "Before text goes into ChatGPT, an email or a form, Burrow swaps names, numbers and addresses for placeholders. Paste the reply back and the real details return.",
-            mark = "mask",
+            "mask a message",
+            "Before text goes into an AI chat, an email or a form, Burrow swaps names, numbers and addresses for placeholders, and puts them back in the reply.",
             doodle = Doodle.MASK,
         )
-        StepHead(1, "paste your text", done = current != null)
-        HandField(text, { text = it }, placeholder = "Hi, I'm Sam Carter, card 4111 1111 1111 1111 — call me on +44 7700 900123…", minHeight = 120.dp)
-        Spacer(Modifier.height(12.dp))
-        if (current == null) {
-            InkButton("mask it", ::maskNow, Modifier.fillMaxWidth(), enabled = text.isNotBlank(), busy = busy)
-            error?.let { Meta(it, Modifier.padding(top = 8.dp), color = burrow.redPen) }
+        StepHead(1, "paste your text", done = current != null, open = open == 1, onClick = if (current != null && open != 1) ({ stage = 1 }) else null)
+        if (open == 1) {
+            HandField(text, { text = it }, placeholder = "Hi, I'm Sam Carter, card 4111 1111 1111 1111. Call me on +44 7700 900123…", minHeight = 120.dp, textStyle = Type.reading)
+            error?.let { Warning(it, Modifier.padding(top = 8.dp)) }
+            if (current != null) HandLink("mask this again", { stage = 2 })
         }
 
-        if (current != null) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                DoodleIcon(Doodle.TICK, null, size = 20.dp)
-                Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.height(8.dp))
+        StepHead(2, "copy the safe version", done = current != null && stage > 2, open = open == 2, onClick = if (current != null && open != 2) ({ stage = 2 }) else null)
+        if (open == 2 && current != null) {
+            val found = if (current.secrets == 0) "nothing personal" else if (current.secrets == 1) "1 secret" else "${current.secrets} secrets"
+            Row(verticalAlignment = Alignment.Bottom) {
+                MarkedText("$found found", mark = found, style = Type.rowTitle)
+                current.language?.let { Caption("  ·  ${languageName(it).substringBefore(" (")}", Modifier.padding(bottom = 2.dp)) }
+            }
+            Spacer(Modifier.height(10.dp))
+            SelectionContainer {
                 Text(
-                    if (current.secrets == 0) "nothing personal found" else if (current.secrets == 1) "1 secret found" else "${current.secrets} secrets found",
-                    style = Hand.label, color = ink,
+                    highlight(current.text, PLACEHOLDER, chip, ink),
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(burrow.smudge).padding(16.dp),
+                    style = Type.reading, color = ink,
                 )
-                current.language?.let { Meta("  ·  ${languageName(it).lowercase()}") }
             }
-            Spacer(Modifier.height(10.dp))
-            StepHead(2, "copy the safe version")
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .border(1.8.dp, ink, RoundedCornerShape(16.dp))
-                    .padding(18.dp),
-            ) {
-                SelectionContainer { Text(highlight(current.text, PLACEHOLDER, marker, markerInk), style = bodyStyle(16f, 25f), color = ink) }
-                Spacer(Modifier.height(10.dp))
-                Meta("reversible on this phone only")
-            }
-            Spacer(Modifier.height(14.dp))
-            InkButton(
-                if (onReplace != null) "put the masked text back" else "copy masked text",
-                {
-                    if (onReplace != null) onReplace(current.text)
-                    else {
-                        copy(context, current.text, sensitive = false)
-                        Toast.makeText(context, "Copied. Paste it into the AI, then bring its reply back here.", Toast.LENGTH_LONG).show()
-                    }
-                },
-                Modifier.fillMaxWidth(), trailing = Doodle.ARROW,
-            )
-            if (onReplace != null) HandLink("copy it instead", { copy(context, current.text, sensitive = false) }, Modifier.align(Alignment.CenterHorizontally))
-
-            Spacer(Modifier.height(24.dp))
-            StepHead(3, "bring the reply back", done = reply.isNotBlank())
-            Meta("Paste what the AI wrote. Burrow puts the real details back in, here on the phone.")
-            Spacer(Modifier.height(10.dp))
-            HandField(reply, { reply = it }, placeholder = "Dear [NAME_1], your order to [ADDRESS_1]…", minHeight = 96.dp)
-            PillButton("paste from clipboard", { paste(context)?.let { reply = it } }, Modifier.padding(top = 8.dp))
-            if (reply.isNotBlank()) {
-                val restored = session.restore(reply)
-                Spacer(Modifier.height(8.dp))
-                Column(Modifier.fillMaxWidth().border(1.4.dp, burrow.rule, RoundedCornerShape(16.dp)).padding(18.dp)) {
-                    SelectionContainer {
-                        Text(restoredText(restored, current.redaction.items.map { it.original }, ink), style = bodyStyle(16f, 25f), color = ink)
-                    }
-                }
-                Spacer(Modifier.height(10.dp))
-                InkButton("copy the restored reply", {
-                    copy(context, restored, sensitive = true)
-                    Toast.makeText(context, "Copied, marked as sensitive.", Toast.LENGTH_SHORT).show()
-                }, Modifier.fillMaxWidth())
-            }
-            Spacer(Modifier.height(16.dp))
-            PillButton("start over with new text", { session.clear(); text = ""; reply = "" }, leading = Doodle.PLUS)
+            Caption("Reversible on this phone only.", Modifier.padding(top = 6.dp))
+            if (onReplace != null) HandLink("copy it instead", { copy(context, current.text, sensitive = false); stage = 3 })
         }
-        Spacer(Modifier.height(20.dp))
-        Meta("Found on this phone by Redact. Nothing is stored; Burrow forgets this in 30 minutes or when you close it.")
+
+        Spacer(Modifier.height(8.dp))
+        StepHead(3, "bring the reply back", done = restored != null, open = open == 3, onClick = if (current != null && open != 3) ({ stage = 3 }) else null)
+        if (open == 3 && current != null) {
+            Body("Paste what the AI wrote. Burrow puts the real details back in, here on the phone.")
+            Spacer(Modifier.height(10.dp))
+            HandField(reply, { reply = it }, placeholder = "Dear [NAME_1], your order to [ADDRESS_1]…", minHeight = 96.dp, textStyle = Type.reading)
+            PillButton("paste from clipboard", { paste(context)?.let { reply = it } }, Modifier.padding(top = 8.dp))
+            if (restored != null) {
+                Spacer(Modifier.height(12.dp))
+                SelectionContainer {
+                    Text(
+                        restoredText(restored, current.redaction.items.map { it.original }, ink),
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(burrow.smudge).padding(16.dp),
+                        style = Type.reading, color = ink,
+                    )
+                }
+            }
+        }
+        if (current != null) HandLink("start over with new text", { session.clear(); text = ""; reply = ""; stage = 1 }, Modifier.padding(top = 12.dp))
+        Spacer(Modifier.height(16.dp))
+        Caption("Found on this phone by Redact. Nothing is stored; Burrow forgets this in 30 minutes or when you close it.")
     }
 }
 
 private fun highlight(text: String, pattern: Regex, bg: Color, fg: Color): AnnotatedString = buildAnnotatedString {
     append(text)
     pattern.findAll(text).forEach { m ->
-        addStyle(SpanStyle(background = bg, color = fg, fontWeight = FontWeight.SemiBold), m.range.first, m.range.last + 1)
+        // Placeholders are monospace on a chip, so they read as slots, not as words.
+        addStyle(SpanStyle(background = bg, color = fg, fontWeight = FontWeight.SemiBold, fontFamily = Mono), m.range.first, m.range.last + 1)
     }
 }
 

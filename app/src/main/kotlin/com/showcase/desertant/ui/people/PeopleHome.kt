@@ -41,6 +41,10 @@ import com.showcase.desertant.people.People
 import com.showcase.desertant.ui.common.relativeDay
 import com.showcase.desertant.ui.hand.Body
 import com.showcase.desertant.ui.hand.Doodle
+import com.showcase.desertant.ui.hand.HandLink
+import com.showcase.desertant.ui.hand.InitialCircle
+import com.showcase.desertant.ui.hand.ItemRow
+import com.showcase.desertant.ui.hand.ListPane
 import com.showcase.desertant.ui.hand.DoodleButton
 import com.showcase.desertant.ui.hand.DoodleIcon
 import com.showcase.desertant.ui.hand.HandDivider
@@ -58,6 +62,8 @@ import com.showcase.desertant.ui.meetings.AssignSpeakerDialog
 import com.showcase.desertant.ui.meetings.decodeTopics
 import com.showcase.desertant.ui.shell.LocalWideLayout
 import com.showcase.desertant.ui.theme.Hand
+import com.showcase.desertant.ui.hand.SheetTitle
+import com.showcase.desertant.ui.theme.Type
 import com.showcase.desertant.ui.theme.burrow
 import kotlinx.coroutines.launch
 
@@ -79,38 +85,38 @@ fun PeopleHome(open: (String) -> Unit) {
         .sortedByDescending { ready[it.meetingId]?.createdAt ?: 0 }
 
     val list = @Composable {
-        HandPage(topEnd = { DoodleButton(Doodle.GEAR, "Settings", { open("settings") }); DoodleButton(Doodle.LOCK, "Privacy", { open("privacy") }) }) {
+        HandPage(
+            topEnd = {
+                HandLink("add someone", { adding = true })
+                DoodleButton(Doodle.GEAR, "Settings", { open("settings") })
+                DoodleButton(Doodle.LOCK, "Privacy", { open("privacy") })
+            },
+        ) {
             PageIntro(
-                doodle = Doodle.PEOPLE,
-                title = "people",
-                purpose =
-                if (learnVoices) "Everyone you've named in a talk: what you talk about and every conversation. Burrow learns a voice only when you name someone."
+                "people",
+                if (learnVoices) "Everyone you've named in a talk, and what you talk about."
                 else "Everyone you've named in a talk. Voice learning is off, so Burrow won't suggest people in new talks.",
             )
-            PillButton("add someone", { adding = true }, leading = Doodle.PLUS)
-            Spacer(Modifier.height(20.dp))
             if (unnamed.isNotEmpty()) {
-                SectionHead("voices to name — ${unnamed.size}", note = "needs you")
-                Meta("Voices Burrow heard in your talks but doesn't know yet. Name each one once.")
-                Spacer(Modifier.height(4.dp))
+                val count = unnamed.size.toString()
+                SectionHead("voices to name · $count", mark = count, first = true)
                 unnamed.take(6).forEachIndexed { n, s ->
                     if (n > 0) HandDivider(seed = n + 3)
                     UnnamedVoice(s, ready[s.meetingId], profiles.orEmpty().firstOrNull { it.id == s.suggestedProfileId }) { assigning = s }
                 }
-                Spacer(Modifier.height(22.dp))
+                SectionHead("your people")
             }
             val p = profiles
-            SectionHead("your people", note = p?.takeIf { it.isNotEmpty() }?.let { "${it.size} profiles" })
             if (p != null && p.isEmpty()) {
                 HandEmpty(
                     "know who said what.",
-                    "Name the voices in a talk and Burrow keeps a page for each person: what you talk about, open follow-ups, every conversation — only on this phone.",
+                    "Name the voices in a talk and Burrow keeps a page for each person, only on this phone.",
                     doodle = Doodle.PERSON,
                 )
             }
             p.orEmpty().forEachIndexed { n, person ->
                 if (n > 0) HandDivider(seed = n)
-                PersonRow(person, speakers.filter { it.profileId == person.id }, ready, selected = wide && selected == person.id) {
+                PersonRow(person, speakers.filter { it.profileId == person.id }, ready, selected = wide && (selected ?: p?.firstOrNull()?.id) == person.id) {
                     if (wide) selected = person.id else open("person/${person.id}")
                 }
             }
@@ -118,8 +124,8 @@ fun PeopleHome(open: (String) -> Unit) {
     }
     if (wide) {
         Row(Modifier.fillMaxSize()) {
-            Box(Modifier.weight(0.42f).fillMaxHeight()) { list() }
-            Box(Modifier.weight(0.58f).fillMaxHeight()) {
+            Box(Modifier.width(ListPane).fillMaxHeight()) { list() }
+            Box(Modifier.weight(1f).fillMaxHeight()) {
                 val id = selected ?: profiles?.firstOrNull()?.id
                 if (id != null) PersonContent(id, open = open, embedded = true)
                 else HandEmpty("no one yet", "People you name in talks show up here.", Modifier.padding(top = 80.dp))
@@ -132,53 +138,27 @@ fun PeopleHome(open: (String) -> Unit) {
 
 @Composable
 private fun UnnamedVoice(s: MeetingSpeakerEntity, meeting: MeetingEntity?, suggestion: ProfileEntity?, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        DoodleIcon(Doodle.WAVE, null, size = 40.dp)
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            s.sampleQuote?.let { Body("“$it”", color = burrow.ink) }
-            Meta("${meeting?.title ?: "a talk"} · ${formatClock(s.talkSec)} of talking", maxLines = 1)
-        }
-        Spacer(Modifier.width(10.dp))
-        PillButton(suggestion?.let { "${it.name.substringBefore(' ')}?" } ?: "name them", onClick)
-    }
+    ItemRow(
+        s.sampleQuote?.let { "“$it”" } ?: "A voice in ${meeting?.title ?: "a talk"}",
+        titleStyle = Type.body,
+        meta = "${meeting?.title ?: "A talk"} · ${formatClock(s.talkSec)} of talking",
+        metaLines = 1,
+        leading = { DoodleIcon(Doodle.WAVE, null, size = 24.dp, color = burrow.pencil) },
+        trailing = { HandLink(suggestion?.let { "${it.name.substringBefore(' ')}?" } ?: "name them", onClick) },
+    )
 }
 
 @Composable
 private fun PersonRow(p: ProfileEntity, appearances: List<MeetingSpeakerEntity>, meetings: Map<Long, MeetingEntity>, selected: Boolean, onClick: () -> Unit) {
     val talks = appearances.map { it.meetingId }.distinct().size
     val last = appearances.mapNotNull { meetings[it.meetingId]?.createdAt }.maxOrNull()
-    val topics = appearances.flatMap { decodeTopics(it.topicsJson) }.groupBy { it.name }
-        .entries.sortedByDescending { e -> e.value.sumOf { it.score } }.take(3).map { it.key.lowercase() }
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .then(if (selected) Modifier.background(burrow.smudge) else Modifier)
-            .clickable(onClick = onClick)
-            .padding(vertical = 14.dp, horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(46.dp).border(1.8.dp, burrow.ink, CircleShape), contentAlignment = Alignment.Center) {
-            Text(p.name.trim().take(1).uppercase().ifEmpty { "?" }, style = Hand.title, color = burrow.ink)
-        }
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(if (p.isMe) "${p.name} (you)" else p.name, style = Hand.door, color = burrow.ink)
-            Meta(
-                listOfNotNull(
-                    if (talks == 1) "1 talk" else "$talks talks",
-                    topics.takeIf { it.isNotEmpty() }?.joinToString(", "),
-                    last?.let { relativeDay(it).lowercase() },
-                ).joinToString(" · "),
-                maxLines = 1,
-            )
-        }
-        DoodleIcon(Doodle.ARROW, null, size = 22.dp, color = burrow.pencil)
-    }
+    ItemRow(
+        if (p.isMe) "${p.name} (you)" else p.name,
+        meta = listOfNotNull(if (talks == 1) "1 talk" else "$talks talks", last?.let { relativeDay(it).lowercase() }).joinToString(" · "),
+        onClick = onClick,
+        selected = selected,
+        leading = { InitialCircle(p.name) },
+    )
 }
 
 @Composable
@@ -188,8 +168,8 @@ fun AddPersonDialog(onDismiss: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var me by remember { mutableStateOf(false) }
     HandSheet(onDismiss) {
-        Text("add someone", style = Hand.headline.copy(fontSize = 34.sp), color = burrow.ink)
-        Meta("Usually you name people straight from a talk's notes. Add someone here to teach Burrow their voice first, with a short sample on their page.")
+        SheetTitle("add someone")
+        Body("Usually you name people straight from a talk's notes. Add someone here to teach Burrow their voice first, with a short sample on their page.")
         HandField(name, { name = it }, placeholder = "their name", singleLine = true)
         SwitchRow("this is me", me, { me = it })
         InkButton("add", { scope.launch { People(context).create(name, me); onDismiss() } }, Modifier.fillMaxWidth(), enabled = name.isNotBlank())

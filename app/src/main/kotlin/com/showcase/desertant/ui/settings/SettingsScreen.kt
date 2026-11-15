@@ -32,6 +32,11 @@ import com.showcase.desertant.core.ModelKind
 import com.showcase.desertant.core.ModelStatus
 import com.showcase.desertant.ui.components.LocalModelHub
 import com.showcase.desertant.ui.hand.Body
+import com.showcase.desertant.ui.hand.Caption
+import com.showcase.desertant.ui.hand.ItemRow
+import com.showcase.desertant.ui.hand.MarkedText
+import com.showcase.desertant.ui.hand.Warning
+import com.showcase.desertant.ui.theme.Type
 import com.showcase.desertant.ui.hand.Doodle
 import com.showcase.desertant.ui.hand.Door
 import com.showcase.desertant.ui.hand.HandDivider
@@ -78,13 +83,20 @@ fun SettingsScreen(onBack: () -> Unit, openLab: () -> Unit) {
     LaunchedEffect(status) { cacheBytes = hub.cacheBytes() }
 
     HandPage(onBack = onBack) {
-        PageIntro(doodle = Doodle.SPARK, title = "the models", purpose = "The AI behind Burrow. Each one is downloaded once, then runs on this phone's own chip — your photos, voices and words never go to it over the internet.")
-        Meta("${Formatter.formatShortFileSize(context, cacheBytes)} on this phone · ai.desertant ${BuildConfig.DESERT_ANT_SDK_VERSION}")
-        if (neverOnline) Body("“Never go online” is on, so missing models can't be downloaded. Turn it off on the privacy page to fetch them once.", Modifier.padding(top = 8.dp), color = burrow.redPen)
-        Spacer(Modifier.height(10.dp))
+        PageIntro(doodle = Doodle.SPARK, title = "models", purpose = "The AI behind Burrow. Each one is downloaded once, then runs on this phone's own chip.")
+        val onPhone = Formatter.formatShortFileSize(context, cacheBytes)
+        Row(verticalAlignment = Alignment.Bottom) {
+            MarkedText(onPhone, mark = onPhone, style = Type.contentTitle)
+            Caption("  on this phone · ai.desertant ${BuildConfig.DESERT_ANT_SDK_VERSION}", Modifier.padding(bottom = 3.dp))
+        }
+        if (neverOnline) Warning("“Never go online” is on, so missing models can't be downloaded. Turn it off on the privacy page to fetch them once.", Modifier.padding(top = 12.dp))
+        Spacer(Modifier.height(12.dp))
         val missing = ModelKind.entries.filter { status[it] == ModelStatus.NotDownloaded || status[it] is ModelStatus.Failed }
-        if (missing.isNotEmpty() && !neverOnline) {
-            PillButton("download the ${missing.size} missing", { hub.downloadInBackground(*missing.toTypedArray()) })
+        // Past three missing, one pill fetches them all and each row gets a quiet link instead of its own button.
+        val many = missing.size > 3
+        if (many && !neverOnline) {
+            val mb = missing.sumOf { k -> k.sizeLabel.filter { it.isDigit() || it == '.' }.toDoubleOrNull() ?: 0.0 }.toInt()
+            PillButton("download all ($mb MB)", { hub.downloadInBackground(*missing.toTypedArray()) }, leading = Doodle.PLUS)
             Spacer(Modifier.height(8.dp))
         }
 
@@ -92,54 +104,49 @@ fun SettingsScreen(onBack: () -> Unit, openLab: () -> Unit) {
             if (n > 0) HandDivider(seed = n)
             val s = status[kind] ?: ModelStatus.Unknown
             val loaded = remember(loadedTick, s) { hub.isLoaded(kind) }
-            Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("${kind.title.lowercase()} · ${kind.sizeLabel}", style = Hand.label, color = burrow.ink)
-                    Meta(JOBS[kind] ?: kind.tagline)
-                    Meta(
-                        when (s) {
-                            ModelStatus.Ready -> if (kind.bundled) "built into the app" else if (loaded) "on the phone · in memory now" else "on the phone"
-                            ModelStatus.Downloading -> "downloading…"
-                            ModelStatus.NotDownloaded -> "not downloaded yet"
-                            is ModelStatus.Failed -> "didn't download: ${s.message}"
-                            ModelStatus.Unknown -> "checking…"
-                        },
-                        color = if (s is ModelStatus.Failed) burrow.redPen else if (s == ModelStatus.Ready) burrow.ink else burrow.pencil,
-                    )
-                }
-                Spacer(Modifier.width(10.dp))
-                when {
-                    (s == ModelStatus.NotDownloaded || s is ModelStatus.Failed) && !neverOnline ->
-                        PillButton("download", { hub.downloadInBackground(kind) })
-                    loaded && !kind.bundled -> PillButton("free memory", { scope.launch { hub.unload(kind); loadedTick++ } })
-                }
-            }
+            val canDownload = (s == ModelStatus.NotDownloaded || s is ModelStatus.Failed) && !neverOnline
+            ItemRow(
+                kind.title,
+                meta = JOBS[kind] ?: kind.tagline,
+                trailing = { Caption(kind.sizeLabel) },
+                below = {
+                    Spacer(Modifier.height(6.dp))
+                    when {
+                        s is ModelStatus.Failed -> Warning("It didn't download: ${s.message}")
+                        s == ModelStatus.Ready -> Caption(if (kind.bundled) "Built into the app" else if (loaded) "On this phone · in memory now" else "On this phone")
+                        s == ModelStatus.Downloading -> Caption("Downloading…")
+                        s == ModelStatus.Unknown -> Caption("Checking…")
+                        !canDownload -> Caption("Not downloaded yet")
+                    }
+                    when {
+                        canDownload && many -> HandLink("download", { hub.downloadInBackground(kind) })
+                        canDownload -> PillButton("download", { hub.downloadInBackground(kind) }, Modifier.padding(top = 4.dp))
+                        loaded && !kind.bundled -> HandLink("free memory", { scope.launch { hub.unload(kind); loadedTick++ } })
+                    }
+                },
+            )
         }
 
-        Spacer(Modifier.height(18.dp))
-        SectionHead("languages", note = "for talks")
+        SectionHead("languages", note = "For talks.")
         SpeechPackList()
 
-        Spacer(Modifier.height(18.dp))
-        SectionHead("questions", note = "for ask Burrow")
+        SectionHead("questions", note = "For ask Burrow and summaries.")
         AskModelRow()
 
-        Spacer(Modifier.height(18.dp))
-        Door("the model lab", openLab, meta = "try each model on its own, outside Burrow's jobs")
+        SectionHead("more")
+        Door("the model lab", openLab, meta = "Try each model on its own, outside Burrow's jobs.")
 
-        Spacer(Modifier.height(18.dp))
-        SectionHead("license key", note = "optional")
-        Meta("Desert Ant models are free for most apps. If you were given a publishable key (pk_live_…), it's sent when a model's license is activated.")
+        SectionHead("license key", note = "Optional.")
+        Body("Desert Ant models are free for most apps. If you were given a publishable key (pk_live_…), it's sent when a model's license is activated.")
         Spacer(Modifier.height(8.dp))
         HandField(key, { key = it; saved = false }, placeholder = "pk_live_…", singleLine = true)
         Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             PillButton("save key", { hub.apiKey = key; saved = true })
-            if (saved) Meta("saved — used from the next model load")
+            if (saved) Caption("Saved. Used from the next model load.")
         }
 
-        Spacer(Modifier.height(18.dp))
         SectionHead("about")
-        Meta("Models by Desert Ant Labs, under the Desert Ant Labs Source-Available License. Indian-language speech: AI4Bharat's IndicConformer (MIT), exported for phones by the sherpa-onnx community (Apache-2.0). Other languages: Meta's Omnilingual ASR (Apache-2.0).")
+        Body("Models by Desert Ant Labs, under the Desert Ant Labs Source-Available License. Indian-language speech: AI4Bharat's IndicConformer (MIT), exported for phones by the sherpa-onnx community (Apache-2.0). Other languages: Meta's Omnilingual ASR (Apache-2.0).")
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             HandLink("desertant.com", { open(context, "https://desertant.com") })
             HandLink("license", { open(context, "https://license.desertant.com/") })

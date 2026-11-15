@@ -43,7 +43,11 @@ import androidx.compose.ui.unit.sp
 import com.showcase.desertant.privacy.ShareCheck
 import com.showcase.desertant.privacy.ShareReport
 import com.showcase.desertant.ui.hand.Body
+import com.showcase.desertant.ui.hand.Caption
 import com.showcase.desertant.ui.hand.Doodle
+import com.showcase.desertant.ui.hand.DoodleIcon
+import com.showcase.desertant.ui.hand.SwitchRow
+import com.showcase.desertant.ui.hand.Warning
 import com.showcase.desertant.ui.hand.HandLink
 import com.showcase.desertant.ui.hand.HandPage
 import com.showcase.desertant.ui.hand.HandSwitch
@@ -55,6 +59,7 @@ import com.showcase.desertant.ui.hand.Snapshot
 import com.showcase.desertant.ui.hand.DoodleButton
 import com.showcase.desertant.ui.theme.AppTheme
 import com.showcase.desertant.ui.theme.Hand
+import com.showcase.desertant.ui.theme.Type
 import com.showcase.desertant.ui.theme.burrow
 import kotlinx.coroutines.launch
 
@@ -141,38 +146,38 @@ internal fun ShareCheckScreen(uri: Uri, onClose: () -> Unit, onSend: (Uri, Boole
             HandLink("send the original", { onSend(uri, true) }, Modifier.align(Alignment.CenterHorizontally))
         }),
     ) {
-        MarkedText("before you send this…", mark = "before you send", style = Hand.headline.copy(fontSize = 40.sp, lineHeight = 42.sp))
-        Meta("Checked on this phone. Nothing about it was uploaded.", Modifier.padding(top = 4.dp))
+        Text("before you send this", style = Hand.headline, color = burrow.ink)
+        Body("Checked on this phone. Nothing about it was uploaded.", Modifier.padding(top = 8.dp))
         Spacer(Modifier.height(18.dp))
         when {
-            error != null -> Body(error!!, color = burrow.redPen)
+            error != null -> Warning(error!!)
             r == null -> Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(18.dp), color = burrow.ink, strokeWidth = 2.dp)
                 Spacer(Modifier.width(12.dp))
-                Body("looking closely…", color = burrow.pencil)
+                Body("Looking closely…", color = burrow.pencil)
             }
             else -> {
                 Polaroid(r, showCrop = crop)
                 Spacer(Modifier.height(20.dp))
                 var n = 0
-                if (r.intimate) Finding(++n, "this looks intimate", "think twice about who'll see it", null, false) {}
+                if (r.intimate) Finding(++n, "This looks intimate", "Think twice about who'll see it.", null, false) {}
                 if (r.sensitive != null) {
-                    Finding(++n, "${r.sensitive} in the picture", if (r.crop != null) "crop to the main subject to leave it out" else "readable at full size", if (r.crop != null) "crop it out" else null, crop) { crop = it }
+                    Finding(++n, "${r.sensitive.replaceFirstChar { it.uppercase() }} in the picture", if (r.crop != null) "Cropping to the main subject leaves it out" else "Readable at full size", if (r.crop != null) "crop it out" else null, crop) { crop = it }
                 }
                 if (r.faces.isNotEmpty()) {
-                    Finding(++n, if (r.faces.size == 1) "1 face" else "${r.faces.size} faces", "you can blur them before sending", "blur faces", blur) { blur = it }
+                    Finding(++n, if (r.faces.size == 1) "1 face" else "${r.faces.size} faces", "", "blur the faces", blur) { blur = it }
                 }
                 if (r.hasLocation || r.cameraData != null) {
                     Finding(
                         ++n,
-                        if (r.hasLocation) "where it was taken, in the photo's data" else "camera details in the photo's data",
-                        listOfNotNull(if (r.hasLocation) "to a few metres" else null, r.cameraData).joinToString(" · "),
-                        "remove it", strip,
+                        if (r.hasLocation) "Where it was taken is in the photo's data" else "Camera details are in the photo's data",
+                        listOfNotNull(if (r.hasLocation) "to a few metres" else null, r.cameraData).joinToString(", "),
+                        "remove the data", strip,
                     ) { strip = it }
                 }
                 if (n == 0) {
                     MarkedText("looks fine to send.", mark = "fine", style = Hand.title)
-                    Meta("No faces, cards, documents or location data found.")
+                    Body("No faces, cards, documents or location data found.")
                 }
             }
         }
@@ -206,27 +211,33 @@ private fun Polaroid(r: ShareReport, showCrop: Boolean) {
                     if (r.sensitive != null && !showCrop) drawCircle(red, size.minDimension * 0.06f, Offset(size.width * 0.92f, size.height * 0.1f), style = Stroke(2.dp.toPx()))
                 }
             }
-            Meta("checked on this phone", Modifier.padding(top = 8.dp, start = 4.dp, bottom = 4.dp))
+            Caption("Checked on this phone", Modifier.padding(top = 8.dp, start = 4.dp, bottom = 4.dp))
         }
     }
 }
 
+/**
+ * One thing found in the photo: an ink number, then either a switch whose
+ * title says what it does ("crop it out"), or, when there's nothing to switch,
+ * the finding itself with a red "!".
+ */
 @Composable
 private fun Finding(n: Int, title: String, body: String, fix: String?, on: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) {
-            Text("$n", Modifier.handCircle(burrow.redPen, seed = n), style = Hand.label, color = burrow.redPen)
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+            Text("$n", Modifier.handCircle(burrow.ink, seed = n), style = Type.rowTitle, color = burrow.ink)
         }
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = Hand.door.copy(fontSize = 24.sp), color = burrow.ink)
-            if (body.isNotBlank()) Meta(body)
-        }
+        Spacer(Modifier.width(12.dp))
         if (fix != null) {
-            Spacer(Modifier.width(8.dp))
-            Column(horizontalAlignment = Alignment.End) {
-                Text(fix, style = Hand.small, color = burrow.pencil)
-                HandSwitch(on, onChange)
+            SwitchRow(fix, on, onChange, Modifier.weight(1f), body = listOf(title, body).filter { it.isNotBlank() }.joinToString(". ") + ".")
+        } else {
+            Row(Modifier.weight(1f).padding(vertical = 10.dp), verticalAlignment = Alignment.Top) {
+                DoodleIcon(Doodle.EXCLAIM, null, Modifier.padding(top = 2.dp), size = 20.dp, color = burrow.redPen, stroke = 2.4.dp)
+                Spacer(Modifier.width(8.dp))
+                Column {
+                    Text(title, style = Type.rowTitle, color = burrow.ink)
+                    if (body.isNotBlank()) Meta(body)
+                }
             }
         }
     }

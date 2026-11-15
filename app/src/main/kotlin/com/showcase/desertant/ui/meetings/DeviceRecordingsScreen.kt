@@ -45,6 +45,7 @@ import com.showcase.desertant.ui.hand.PageIntro
 import com.showcase.desertant.ui.hand.PillButton
 import com.showcase.desertant.ui.hand.Steps
 import com.showcase.desertant.ui.theme.Hand
+import com.showcase.desertant.ui.theme.Type
 import com.showcase.desertant.ui.theme.burrow
 import kotlinx.coroutines.launch
 
@@ -102,7 +103,7 @@ fun DeviceRecordingsScreen(onBack: () -> Unit) {
                     DoodleIcon(if (r.isCall) Doodle.PHONE else Doodle.MIC, if (r.isCall) "Call" else "Recording", size = 22.dp)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(r.name, style = Hand.label, color = burrow.ink, maxLines = 1)
+                        Text(r.name, style = Type.rowTitle, color = burrow.ink, maxLines = 2)
                         Meta("${dateTime(context, r.dateMillis)} · ${formatClock(r.durationSec)}")
                     }
                     if (r.imported) Meta("brought in ✓")

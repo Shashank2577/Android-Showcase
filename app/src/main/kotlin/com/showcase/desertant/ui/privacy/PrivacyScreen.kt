@@ -30,6 +30,7 @@ import com.showcase.desertant.privacy.LedgerEntry
 import com.showcase.desertant.ui.common.formatBytes
 import com.showcase.desertant.ui.common.relativeDay
 import com.showcase.desertant.ui.hand.Body
+import com.showcase.desertant.ui.hand.Caption
 import com.showcase.desertant.ui.hand.Doodle
 import com.showcase.desertant.ui.hand.DoodleIcon
 import com.showcase.desertant.ui.hand.Door
@@ -44,6 +45,8 @@ import com.showcase.desertant.ui.hand.SectionHead
 import com.showcase.desertant.ui.hand.SwitchRow
 import com.showcase.desertant.ui.onboarding.PrivacyExplainer
 import com.showcase.desertant.ui.theme.Hand
+import com.showcase.desertant.ui.hand.SheetTitle
+import com.showcase.desertant.ui.theme.Type
 import com.showcase.desertant.ui.theme.burrow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -75,29 +78,24 @@ fun PrivacyScreen(onBack: () -> Unit, openModels: () -> Unit, onWiped: () -> Uni
         val today = remember(version) { LedgerEntry.entries.map { it to app.ledger.today(it) }.filter { it.second > 0 } }
         val total = remember(version) { LedgerEntry.entries.map { it to app.ledger.total(it) }.filter { it.second > 0 } }
 
-        MarkedText("nothing of yours left this phone.", mark = "nothing", style = Hand.headline.copy(fontSize = 42.sp, lineHeight = 44.sp))
+        MarkedText("nothing of yours left this phone.", mark = "nothing", style = Hand.headline)
         Spacer(Modifier.height(6.dp))
         Body(
             "Burrow has sent ${formatBytes(context, sent)} since the phone started — requests for model files, nothing else. " +
                 "It has no upload code, no account and no analytics." + if (neverOnline) " The network is off." else "",
-            color = burrow.pencil,
         )
 
-        Spacer(Modifier.height(22.dp))
         SectionHead("today")
-        if (today.isEmpty()) Meta("Nothing yet today.", Modifier.padding(top = 6.dp))
+        if (today.isEmpty()) Body("Nothing yet today.", color = burrow.pencil)
         today.forEach { (e, n) -> LedgerLine(e.line(n)) }
 
         if (total.isNotEmpty()) {
-            Spacer(Modifier.height(14.dp))
-            SectionHead("since you set Burrow up", note = relativeDay(app.ledger.since).lowercase())
+            SectionHead("since setup", note = "Since ${relativeDay(app.ledger.since).lowercase()}.")
             total.forEach { (e, n) -> LedgerLine(e.line(n)) }
         }
 
-        Spacer(Modifier.height(20.dp))
-        HandDivider()
-        Spacer(Modifier.height(8.dp))
-        SwitchRow("never go online", neverOnline, p::setNeverOnline, body = "Burrow won't touch the network, even to fetch a missing model")
+        SectionHead("switches")
+        SwitchRow("never go online", neverOnline, p::setNeverOnline, body = "Burrow won't touch the network, even to fetch a missing model.")
         SwitchRow(
             "lock with fingerprint", lockApp,
             { on ->
@@ -105,26 +103,26 @@ fun PrivacyScreen(onBack: () -> Unit, openModels: () -> Unit, onWiped: () -> Uni
                 else if (!Biometrics.deviceSecure(context)) Toast.makeText(context, "Set a screen lock in Android's settings first.", Toast.LENGTH_LONG).show()
                 else scope.launch { if (Biometrics.confirm(context, "Lock Burrow with your fingerprint")) p.setLockApp(true) }
             },
-            body = "when you come back after 30 seconds away",
+            body = "When you come back after 30 seconds away.",
         )
-        SwitchRow("delete talk audio after 30 days", autoDelete, { on ->
+        SwitchRow("delete old audio", autoDelete, { on ->
             p.setAutoDeleteAudio(on)
             if (on) scope.launch {
                 val n = Housekeeping.deleteOldAudio(app)
                 if (n > 0) Toast.makeText(context, "Deleted the audio of $n older talks. Their notes stay.", Toast.LENGTH_LONG).show()
             }
-        }, body = "the notes and transcript stay")
-        SwitchRow("learn voices when I name someone", learnVoices, p::setLearnVoices, body = "so Burrow can suggest them in later talks")
+        }, body = "Talk audio goes after 30 days. The notes and transcript stay.")
+        SwitchRow("learn voices", learnVoices, p::setLearnVoices, body = "When you name someone, so Burrow can suggest them in later talks.")
         SwitchRow(
-            "hide every screen from screenshots", secure, p::setSecureScreens,
-            body = "The vault, private photos and masked text are always hidden from screenshots and recent apps; this hides the rest too.",
+            "hide from screenshots", secure, p::setSecureScreens,
+            body = "The vault, private photos and masked text are always hidden from screenshots and recent apps. This hides every other screen too.",
         )
 
         Spacer(Modifier.height(16.dp))
-        Door("the models & languages", openModels, meta = "what's on the phone, Hindi speech, the model lab")
+        Door("models & languages", openModels, meta = "What's on the phone, speech packs, the model lab.")
         Spacer(Modifier.height(24.dp))
         HandLink("wipe everything", { wipe = true }, Modifier.align(Alignment.CenterHorizontally), color = burrow.redPen)
-        Meta("Photos stay in your gallery; Burrow forgets all it learned.", Modifier.align(Alignment.CenterHorizontally))
+        Caption("Photos stay in your gallery; Burrow forgets all it learned.", Modifier.align(Alignment.CenterHorizontally))
     }
 
     if (explain) PrivacyExplainer { explain = false }
@@ -132,13 +130,12 @@ fun PrivacyScreen(onBack: () -> Unit, openModels: () -> Unit, onWiped: () -> Uni
         var models by remember { mutableStateOf(false) }
         var busy by remember { mutableStateOf(false) }
         HandSheet({ if (!busy) wipe = false }) {
-            Text("wipe everything?", style = Hand.headline.copy(fontSize = 34.sp), color = burrow.ink)
+            SheetTitle("wipe everything?")
             Body(
                 "Burrow forgets every photo it checked, every talk and its audio, every person and voice, the vault and its photos, and your settings. " +
                     "Your gallery isn't touched. This can't be undone.",
-                color = burrow.pencil,
             )
-            SwitchRow("also delete the downloaded models", models, { models = it }, body = "you'd download them again to use Burrow")
+            SwitchRow("delete the models too", models, { models = it }, body = "You'd download them again to use Burrow.")
             InkButton("wipe it all", {
                 busy = true
                 scope.launch {
@@ -158,6 +155,6 @@ private fun LedgerLine(text: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
         DoodleIcon(Doodle.TICK, null, size = 18.dp)
         Spacer(Modifier.width(12.dp))
-        Text(text, style = Hand.label, color = burrow.ink)
+        Text(text, style = Type.body, color = burrow.ink)
     }
 }

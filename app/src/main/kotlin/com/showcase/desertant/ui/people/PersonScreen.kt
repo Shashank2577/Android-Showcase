@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 
 
 package com.showcase.desertant.ui.people
@@ -55,6 +57,13 @@ import com.showcase.desertant.data.MeetingStatus
 import com.showcase.desertant.people.People
 import com.showcase.desertant.ui.common.dateTime
 import com.showcase.desertant.ui.hand.Body
+import com.showcase.desertant.ui.hand.Caption
+import com.showcase.desertant.ui.hand.HandLink
+import com.showcase.desertant.ui.hand.HandTag
+import com.showcase.desertant.ui.hand.InitialCircle
+import com.showcase.desertant.ui.hand.ItemRow
+import com.showcase.desertant.ui.meetings.talkDate
+import com.showcase.desertant.ui.theme.Type
 import com.showcase.desertant.ui.hand.ConfirmSheet
 import com.showcase.desertant.ui.hand.DoneNote
 import com.showcase.desertant.ui.hand.Doodle
@@ -70,6 +79,7 @@ import com.showcase.desertant.ui.hand.PillButton
 import com.showcase.desertant.ui.hand.SectionHead
 import com.showcase.desertant.ui.meetings.decodeTopics
 import com.showcase.desertant.ui.theme.Hand
+import com.showcase.desertant.ui.hand.SheetTitle
 import com.showcase.desertant.ui.theme.burrow
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -112,114 +122,99 @@ fun PersonContent(id: Long, open: (String) -> Unit, embedded: Boolean, onBack: (
 
     HandPage(
         onBack = if (embedded) null else onBack,
-        topEnd = {
-            Box {
-                PillButton("options ▾", { menu = true }, Modifier.padding(end = 8.dp))
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; renaming = true })
-                    if (person?.contactUri != null || person?.phones?.isNotEmpty() == true) {
-                        DropdownMenuItem(text = { Text("Unlink their contact") }, onClick = { menu = false; scope.launch { people.unlinkContact(id) } })
-                    }
-                    DropdownMenuItem(text = { Text("Forget this person") }, onClick = { menu = false; deleting = true })
-                }
-            }
-        },
+        topEnd = { HandLink("more", { menu = true }, Modifier.padding(end = 4.dp)) },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(64.dp).border(2.dp, burrow.ink, CircleShape), contentAlignment = Alignment.Center) {
-                Text(p.name.trim().take(1).uppercase().ifEmpty { "?" }, style = Hand.headline, color = burrow.ink)
-            }
+            InitialCircle(p.name, size = 56.dp)
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
-                Text(if (p.isMe) "${p.name} (you)" else p.name, style = Hand.headline.copy(fontSize = 36.sp), color = burrow.ink)
-                Meta(
+                Text(if (p.isMe) "${p.name} (you)" else p.name, style = Type.contentTitle, color = burrow.ink)
+                Caption(
                     listOfNotNull(
                         mine.map { it.meetingId }.distinct().size.let { if (it == 1) "1 talk" else "$it talks" },
                         calls.size.takeIf { it > 0 }?.let { if (it == 1) "1 call" else "$it calls" },
                         chatLinks.filterNot { it.isMe }.sumOf { it.messages }.takeIf { it > 0 }?.let { "$it messages" },
                         "${formatClock(totalTalk)} talking",
-                        languages.takeIf { it.isNotEmpty() }?.joinToString(", ") { languageName(it) },
+                        languages.takeIf { it.isNotEmpty() }?.joinToString(", ") { languageName(it).substringBefore(" (") },
                     ).joinToString(" · "),
                 )
             }
         }
-        Spacer(Modifier.height(14.dp))
-        ContactRow(p, onLink = { pick.launch(Unit) })
-        Spacer(Modifier.height(20.dp))
-        VoiceSection(p.signatureCount) { samples -> people.enroll(id, samples) }
-        if (topics.isNotEmpty()) {
-            Spacer(Modifier.height(16.dp))
-            SectionHead("what you talk about")
-            topics.forEach { t ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text((topicNames[t.slug] ?: t.slug).lowercase(), Modifier.width(120.dp), style = Hand.label, color = burrow.ink)
-                    HandProgress(t.share.toFloat(), Modifier.weight(1f))
-                }
-            }
-        }
-        val quotes = mine.mapNotNull { s -> s.sampleQuote?.let { it to byId[s.meetingId] } }.take(4)
-        if (quotes.isNotEmpty()) {
-            Spacer(Modifier.height(16.dp))
-            SectionHead("in their words")
-            quotes.forEach { (q, m) ->
-                Column(Modifier.padding(vertical = 6.dp)) {
-                    Body("“$q”")
-                    m?.let { Meta(it.title) }
-                }
-            }
-        }
         Spacer(Modifier.height(16.dp))
-        SectionHead("talks together", note = "tap one to open its notes")
-        if (mine.isEmpty()) Meta("Not in any talk yet. Open a talk's notes and tap “name them” next to their voice.")
+        ContactRow(p, onLink = { pick.launch(Unit) })
+
+        SectionHead("talks together")
+        if (mine.isEmpty()) Body("Not in any talk yet. Open a talk's notes and tap “name them” next to their voice.", color = burrow.pencil)
         mine.forEachIndexed { n, s ->
             val m = byId[s.meetingId] ?: return@forEachIndexed
             if (n > 0) HandDivider(seed = n)
-            Door(
-                m.title, { open("meeting/${m.id}") },
-                meta = "${dateTime(context, m.createdAt)} · spoke ${formatClock(s.talkSec)} (${"%.0f".format(s.talkSec / m.durationSec.coerceAtLeast(1.0) * 100)}%)",
-                style = Hand.door,
+            ItemRow(
+                m.title,
+                meta = "${talkDate(context, m.createdAt)} · spoke ${formatClock(s.talkSec)} (${"%.0f".format(s.talkSec / m.durationSec.coerceAtLeast(1.0) * 100)}%)",
+                onClick = { open("meeting/${m.id}") },
             )
         }
 
-        Spacer(Modifier.height(16.dp))
-        SectionHead("calls", note = calls.size.takeIf { it > 0 }?.let { if (it == 1) "1 recording" else "$it recordings" })
+        SectionHead("calls")
         if (calls.isEmpty()) {
-            Meta(
+            Body(
                 if (p.phones.isEmpty()) "Call recordings named after them show up here. Link their contact so Burrow also knows their number."
-                else "None yet. Recordings from your phone app (talks → call recordings) land here by their name or number.",
+                else "None yet. Recordings from your phone app (talks → import) land here by their name or number.",
+                color = burrow.pencil,
             )
         }
         calls.forEachIndexed { n, m ->
             if (n > 0) HandDivider(seed = n + 5)
-            Door(
-                m.title, { open("meeting/${m.id}") },
-                meta = "${dateTime(context, m.createdAt)}${if (m.durationSec > 0) " · " + formatClock(m.durationSec) else ""}${if (m.status != MeetingStatus.READY) " · notes not ready yet" else ""}",
-                style = Hand.door,
+            ItemRow(
+                m.title,
+                meta = "${talkDate(context, m.createdAt)}${if (m.durationSec > 0) " · " + formatClock(m.durationSec) else ""}${if (m.status != MeetingStatus.READY) " · notes not ready yet" else ""}",
+                onClick = { open("meeting/${m.id}") },
                 leading = { DoodleIcon(Doodle.PHONE, null, size = 24.dp, color = burrow.pencil) },
             )
         }
 
-        Spacer(Modifier.height(16.dp))
         val theirChats = chatLinks.mapNotNull { l -> chats.firstOrNull { it.id == l.chatId }?.let { it to l } }.distinctBy { it.first.id }
-        SectionHead("chats", note = "only ones you shared")
+        SectionHead("chats", note = "Only ones you shared.")
         if (theirChats.isEmpty()) {
-            Meta("To add one: in WhatsApp open your chat with ${p.name.substringBefore(' ')} → ⋮ → More → Export chat → Burrow. Burrow keeps it on this phone and never reads your messages on its own.")
+            Body("To add one: in WhatsApp open your chat with ${p.name.substringBefore(' ')} → ⋮ → More → Export chat → Burrow. Burrow keeps it on this phone and never reads your messages on its own.", color = burrow.pencil)
         }
         theirChats.forEachIndexed { n, (c, l) ->
             if (n > 0) HandDivider(seed = n + 9)
-            Door(
-                c.title, { open("chat/${c.id}") },
+            ItemRow(
+                c.title,
                 meta = "${l.messages} of ${c.messageCount} messages from them · last ${relativeDay(c.lastAt).lowercase()}",
-                style = Hand.door,
+                onClick = { open("chat/${c.id}") },
                 leading = { DoodleIcon(Doodle.BUBBLE, null, size = 24.dp, color = burrow.pencil) },
             )
+        }
+
+        if (topics.isNotEmpty()) {
+            SectionHead("what you talk about")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                topics.forEach { t -> HandTag((topicNames[t.slug] ?: t.slug).lowercase()) }
+            }
+        }
+
+        VoiceSection(p.signatureCount) { samples -> people.enroll(id, samples) }
+    }
+
+    if (menu) {
+        HandSheet({ menu = false }) {
+            SheetTitle(p.name.substringBefore(' ').lowercase().ifEmpty { "this person" })
+            ItemRow("Rename", onClick = { menu = false; renaming = true }, leading = { DoodleIcon(Doodle.PEN, null, size = 24.dp) })
+            if (p.contactUri != null) ItemRow("Open their contact", onClick = { menu = false; runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(p.contactUri))) } }, leading = { DoodleIcon(Doodle.PERSON, null, size = 24.dp) })
+            ItemRow(if (p.contactUri == null && p.phones.isEmpty()) "Link their contact" else "Add a number", onClick = { menu = false; pick.launch(Unit) }, leading = { DoodleIcon(Doodle.PLUS, null, size = 24.dp) })
+            if (p.contactUri != null || p.phones.isNotEmpty()) {
+                ItemRow("Unlink their contact", onClick = { menu = false; scope.launch { people.unlinkContact(id) } }, leading = { DoodleIcon(Doodle.CROSS, null, size = 24.dp) })
+            }
+            ItemRow("Forget this person", onClick = { menu = false; deleting = true }, titleColor = burrow.redPen, leading = { DoodleIcon(Doodle.TRASH, null, size = 24.dp, color = burrow.redPen) })
         }
     }
 
     if (renaming) {
         var name by remember { mutableStateOf(p.name) }
         HandSheet({ renaming = false }) {
-            Text("rename", style = Hand.headline.copy(fontSize = 34.sp), color = burrow.ink)
+            SheetTitle("rename")
             HandField(name, { name = it }, singleLine = true)
             InkButton("save", { scope.launch { people.rename(id, name) }; renaming = false }, Modifier.fillMaxWidth(), enabled = name.isNotBlank())
         }
@@ -259,23 +254,22 @@ private fun VoiceSection(samples: Int, onSample: suspend (FloatArray) -> Boolean
     }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { if (it) record() }
 
-    SectionHead("their voice", note = "only on this phone")
-    Body(
+    SectionHead("their voice")
+    Meta(
         when (samples) {
-            0 -> "Not learned yet. Name them in a talk, or record a short sample here, and Burrow will suggest them in future talks."
-            in 1..2 -> "Learned from $samples sample${if (samples > 1) "s" else ""}. Each one makes suggestions better."
-            else -> "Learned from $samples samples — Burrow knows this voice well."
+            0 -> "Not learned yet. Name them in a talk, or record a sample, and Burrow suggests them in later talks."
+            in 1..2 -> "Learned from $samples sample${if (samples > 1) "s" else ""}, only on this phone. Each one makes suggestions better."
+            else -> "Learned from $samples samples, only on this phone. Burrow knows this voice well."
         },
-        color = burrow.pencil,
     )
-    HandProgress((samples / 5f).coerceAtMost(1f), Modifier.padding(vertical = 6.dp))
+    Spacer(Modifier.height(8.dp))
     if (recording) {
-        Text("have them talk naturally… ${"%.0f".format(seconds)} of 15 s", style = Hand.label, color = burrow.ink)
+        Body("Have them talk naturally… ${"%.0f".format(seconds)} of 15 s")
         HandProgress((seconds / 15).toFloat().coerceAtMost(1f))
         PillButton(if (seconds >= 15) "done" else "stop", { recorder.stop() }, Modifier.padding(top = 6.dp), leading = Doodle.STOP)
     } else {
         PillButton(
-            "record a 15-second sample",
+            "record a sample",
             {
                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) record()
                 else permission.launch(Manifest.permission.RECORD_AUDIO)
@@ -294,15 +288,12 @@ private fun ContactRow(p: ProfileEntity, onLink: () -> Unit) {
     val number = Contacts.phonesOf(p).firstOrNull()
     if (p.contactUri == null && number == null) {
         PillButton("link their contact", onLink, leading = Doodle.PERSON)
-        Meta("Pick them in your contacts so their call recordings and chats come here. Burrow sees only the one contact you pick.", Modifier.padding(top = 4.dp))
+        Caption("So their call recordings and chats come here. Burrow sees only the one contact you pick.", Modifier.padding(top = 4.dp))
         return
     }
+    if (number == null) return
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (number != null) {
-            PillButton("call", { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number"))) }, leading = Doodle.PHONE)
-            PillButton("message", { context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$number"))) }, leading = Doodle.BUBBLE)
-        }
-        p.contactUri?.let { u -> PillButton("contact", { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) } }, leading = Doodle.PERSON) }
-        PillButton("add a number", onLink, leading = Doodle.PLUS)
+        PillButton("call", { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number"))) }, leading = Doodle.PHONE)
+        PillButton("message", { context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$number"))) }, leading = Doodle.BUBBLE)
     }
 }

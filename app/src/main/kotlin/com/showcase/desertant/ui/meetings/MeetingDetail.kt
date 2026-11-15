@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalLayoutApi::class)
+
 package com.showcase.desertant.ui.meetings
 
 import androidx.compose.foundation.Canvas
@@ -7,6 +9,19 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.semantics.Role
+import com.showcase.desertant.ask.TalkSummaries
+import com.showcase.desertant.ui.hand.Caption
+import com.showcase.desertant.ui.hand.ChoicePill
+import com.showcase.desertant.ui.hand.HandProgress
+import com.showcase.desertant.ui.hand.HandTag
+import com.showcase.desertant.ui.hand.ItemRow
+import com.showcase.desertant.ui.hand.ReadingColumn
+import com.showcase.desertant.ui.hand.Warning
+import com.showcase.desertant.ui.theme.themed
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -85,6 +100,8 @@ import com.showcase.desertant.ui.settings.LanguageSheet
 import com.showcase.desertant.ui.settings.PackRow
 import com.showcase.desertant.ui.shell.LocalWideLayout
 import com.showcase.desertant.ui.theme.Hand
+import com.showcase.desertant.ui.theme.Type
+import com.showcase.desertant.ui.hand.SheetTitle
 import com.showcase.desertant.ui.theme.burrow
 import java.io.File
 import kotlinx.coroutines.launch
@@ -94,7 +111,12 @@ fun MeetingDetailScreen(id: Long, onBack: () -> Unit, open: (String) -> Unit) {
     MeetingDetailContent(id, open = open, embedded = false, onBack = onBack)
 }
 
-/** A talk's notes. [embedded] drops the back button for the Fold's two-pane layout. */
+/**
+ * A talk's notes. Its job: read what was said and what was decided. Three
+ * views behind pills (summary, to-dos, transcript); rename, language and
+ * delete live in the "more" sheet. [embedded] drops the back button for the
+ * two-pane layout.
+ */
 @Composable
 fun MeetingDetailContent(id: Long, open: (String) -> Unit, embedded: Boolean, onBack: () -> Unit = {}) {
     val context = LocalContext.current
@@ -103,7 +125,7 @@ fun MeetingDetailContent(id: Long, open: (String) -> Unit, embedded: Boolean, on
     val meeting by remember(id) { db.meetings().observe(id) }.collectAsState(initial = null)
     val speakers by remember(id) { db.speakers().forMeeting(id) }.collectAsState(initial = emptyList())
     val profiles by remember { db.profiles().all() }.collectAsState(initial = emptyList())
-    var menu by remember { mutableStateOf(false) }
+    var more by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     var sharing by remember { mutableStateOf(false) }
     var assigning by remember { mutableStateOf<MeetingSpeakerEntity?>(null) }
@@ -117,23 +139,28 @@ fun MeetingDetailContent(id: Long, open: (String) -> Unit, embedded: Boolean, on
     }
 
     Column(Modifier.fillMaxSize().background(burrow.paper).statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             if (!embedded) DoodleButton(Doodle.BACK, "Back", onBack)
             Spacer(Modifier.weight(1f))
             if (m.status == MeetingStatus.READY) DoodleButton(Doodle.SHARE, "Share notes", { sharing = true })
-            Box {
-                PillButton("options ▾", { menu = true }, Modifier.padding(horizontal = 8.dp))
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; renaming = true })
-                    DropdownMenuItem(text = { Text("Write the notes again") }, onClick = { menu = false; retry() })
-                    DropdownMenuItem(text = { Text("Delete this talk") }, onClick = { menu = false; confirmDelete = true })
-                }
-            }
+            HandLink("more", { more = true }, Modifier.padding(end = 4.dp))
         }
         if (m.status != MeetingStatus.READY) ProcessingState(m, ::retry) { choosingLanguage = true }
-        else Notes(m, speakers, profiles, onRename = { renaming = true }, onAssign = { assigning = it }, open = open, onChooseLanguage = { choosingLanguage = true })
+        else Notes(m, speakers, profiles, onAssign = { assigning = it }, open = open)
     }
 
+    if (more) {
+        HandSheet({ more = false }) {
+            SheetTitle("this talk")
+            SheetAction("rename", Doodle.PEN) { more = false; renaming = true }
+            SheetAction("language: ${m.language?.let { languageName(it).substringBefore(" (") } ?: "worked out by Burrow"}", Doodle.BUBBLE) { more = false; choosingLanguage = true }
+            SheetAction("write the notes again", Doodle.CURL) { more = false; retry() }
+            SheetAction("delete this talk", Doodle.TRASH, danger = true) { more = false; confirmDelete = true }
+            Caption(
+                if (File(m.audioPath).exists()) "The audio is deleted after 30 days. The notes stay." else "The audio was deleted after 30 days. The notes stay.",
+            )
+        }
+    }
     if (choosingLanguage) {
         LanguageSheet(m.language, onDismiss = { choosingLanguage = false }) { code ->
             choosingLanguage = false
@@ -165,14 +192,27 @@ fun MeetingDetailContent(id: Long, open: (String) -> Unit, embedded: Boolean, on
     }
 }
 
+/** One action in a sheet: a doodle and a hand-lettered word or two, 56 dp high. */
+@Composable
+private fun SheetAction(text: String, doodle: Doodle, danger: Boolean = false, onClick: () -> Unit) {
+    val color = if (danger) burrow.redPen else burrow.ink
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(10.dp)).clickable(role = Role.Button, onClick = onClick).padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        DoodleIcon(doodle, null, size = 24.dp, color = color)
+        Spacer(Modifier.width(14.dp))
+        Text(text, style = Hand.door, color = color)
+    }
+}
+
 @Composable
 private fun ProcessingState(m: MeetingEntity, onRetry: () -> Unit, onChooseLanguage: () -> Unit) {
     Column(
-        Modifier.fillMaxSize().padding(horizontal = Gutter, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        Modifier.fillMaxSize().padding(horizontal = Gutter, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text(m.title, style = Hand.headline, color = burrow.ink)
+        Text(m.title, style = Type.contentTitle, color = burrow.ink)
         val context = LocalContext.current
         val packs by SpeechPacks.state.collectAsState()
         val pack = SpeechPacks.route(m.language)?.takeIf { m.languageSupported == false }
@@ -180,130 +220,109 @@ private fun ProcessingState(m: MeetingEntity, onRetry: () -> Unit, onChooseLangu
             // A talk in a language Voz doesn't speak: one download away from its notes.
             val name = languageName(m.language).substringBefore(" (")
             val ready = packs[pack.code] == SpeechPacks.State.Ready || SpeechPacks.isReady(context, pack)
-            Body(
-                if (ready) "The $name speech pack is on the phone now." else "This talk is in $name. Burrow needs the speech pack for it, once, to write the notes.",
-                color = burrow.ink,
-            )
+            Body(if (ready) "The $name speech pack is on the phone now." else "This talk is in $name. Burrow needs the speech pack for it, once, to write the notes.")
             if (ready) InkButton("write the notes", onRetry, Modifier.fillMaxWidth()) else PackRow(pack)
             HandLink("not $name? choose the language", onChooseLanguage)
         } else if (m.status == MeetingStatus.FAILED) {
-            DoodleIcon(Doodle.CROSS, null, size = 40.dp, color = burrow.redPen, stroke = 3.dp)
-            Body(m.error ?: "The notes couldn't be written.", color = burrow.redPen)
-            InkButton("try again", onRetry)
+            Warning(m.error ?: "The notes couldn't be written.")
+            InkButton("try again", onRetry, Modifier.fillMaxWidth())
             HandLink("wrong language? choose it", onChooseLanguage)
         } else {
-            CircularProgressIndicator(color = burrow.ink, strokeWidth = 2.dp)
-            Text((m.progress ?: "waiting to be written up").lowercase(), style = Hand.door, color = burrow.ink)
-            Meta("cleaning the audio → the language → the words → who spoke when → topics and follow-ups. It all runs on this phone; you'll get a quiet notification.")
+            Caption(m.progress ?: "Waiting to be written up")
+            HandProgress(null)
+            Body("Cleaning the audio, finding the language, writing down the words, working out who spoke when, then the topics and follow-ups. It all runs on this phone, and you'll get a quiet notification.")
         }
     }
 }
+
+private enum class TalkView { SUMMARY, TODOS, TRANSCRIPT }
 
 @Composable
 private fun Notes(
     m: MeetingEntity,
     speakers: List<MeetingSpeakerEntity>,
     profiles: List<ProfileEntity>,
-    onRename: () -> Unit,
     onAssign: (MeetingSpeakerEntity) -> Unit,
     open: (String) -> Unit,
-    onChooseLanguage: () -> Unit,
 ) {
     val utterances = remember(m.utterancesJson) { decodeUtterances(m.utterancesJson) }
     val topics = remember(m.topicsJson) { decodeTopics(m.topicsJson) }
     val highlights = remember(m.highlightsJson) { decodeMoments(m.highlightsJson) }
     val followUps = remember(m.followUpsJson) { decodeMoments(m.followUpsJson) }
+    val summary = remember(m.summaryJson) { TalkSummaries.decode(m.summaryJson) }
     val audio = remember(m.audioPath) { File(m.audioPath).exists() }
     val player = rememberMeetingPlayer(m.audioPath)
     var filter by rememberSaveable { mutableStateOf("") }
-    val done = remember { mutableStateListOf<Int>() }
+    var view by rememberSaveable(m.id) { mutableStateOf(TalkView.SUMMARY) }
     val shown = remember(utterances, filter) { if (filter.isBlank()) utterances else utterances.filter { it.text.contains(filter, true) } }
     val active = utterances.indexOfLast { player.positionSec >= it.start - 0.05 }.takeIf { player.playing || player.positionSec > 0 }
     val wide = LocalWideLayout.current
     val context = LocalContext.current
+    val todoCount = summary?.todos?.size ?: followUps.size
+    val seek: (Double) -> Unit = { player.seek(it, andPlay = true) }
 
-    val overview: LazyListScope.() -> Unit = {
-        item {
-            Row(verticalAlignment = Alignment.Top) {
-                Text(m.title, Modifier.weight(1f), style = Hand.headline, color = burrow.ink)
-                DoodleButton(Doodle.PEN, "Rename", onRename, size = 22.dp)
+    val pad = PaddingValues(start = Gutter, end = Gutter, top = 4.dp, bottom = 40.dp)
+    Box(Modifier.fillMaxSize(), contentAlignment = if (wide) Alignment.TopStart else Alignment.TopCenter) {
+        LazyColumn(
+            Modifier.widthIn(max = ReadingColumn + Gutter * 2).fillMaxSize().padding(start = if (wide) 16.dp else 0.dp),
+            contentPadding = pad,
+        ) {
+            item {
+                Text(m.title, style = Type.contentTitle, color = burrow.ink)
+                Caption(
+                    listOfNotNull(
+                        talkDate(context, m.createdAt),
+                        m.durationSec.takeIf { it > 0 }?.let { "${(it / 60).toInt().coerceAtLeast(1)} min" },
+                        m.language?.let { languageName(it).substringBefore(" (") },
+                    ).joinToString(" · "),
+                    Modifier.padding(top = 2.dp),
+                )
+                if (topics.isNotEmpty()) Caption(topics.take(4).joinToString(" · ") { it.name.lowercase() }, Modifier.padding(top = 2.dp))
+                Spacer(Modifier.height(16.dp))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ChoicePill("summary", view == TalkView.SUMMARY, { view = TalkView.SUMMARY })
+                    ChoicePill(if (todoCount > 0) "to-dos $todoCount" else "to-dos", view == TalkView.TODOS, { view = TalkView.TODOS })
+                    ChoicePill("transcript", view == TalkView.TRANSCRIPT, { view = TalkView.TRANSCRIPT })
+                }
+                Spacer(Modifier.height(20.dp))
+                // The player shows once something is playing, and always with the transcript.
+                if (audio && player.available && (view == TalkView.TRANSCRIPT || player.playing || player.positionSec > 0)) {
+                    PlayerLine(player, m.durationSec)
+                    Spacer(Modifier.height(16.dp))
+                }
             }
-            Meta(
-                listOfNotNull(dateTime(context, m.createdAt), formatClock(m.durationSec)).joinToString(" · "),
-                Modifier.padding(top = 2.dp),
-            )
-            PillButton(
-                "${m.language?.let { languageName(it).substringBefore(" (").lowercase() } ?: "language"} ▾",
-                onChooseLanguage, Modifier.padding(top = 8.dp),
-            )
-            if (topics.isNotEmpty()) {
-                val words = topics.take(4).joinToString("  ·  ") { it.name.lowercase() }
-                MarkedText(words, Modifier.padding(top = 10.dp), mark = topics.first().name.lowercase(), style = Hand.label)
-            }
-        }
-        item {
-            if (audio && player.available) PlayerLine(player, m.durationSec)
-            else Meta("The audio was deleted after 30 days. The notes stay.", Modifier.padding(vertical = 8.dp))
-        }
-        item { SummarySection(m, onSeek = { player.seek(it) }, open = open) }
-        if (speakers.isNotEmpty()) item { Lanes(utterances, speakers, profiles, m.durationSec, player) }
-        item { WhoWasThere(speakers, profiles, onAssign, open) }
-        if (speakers.any { it.profileId == null }) item { Meta("Name a voice once and Burrow suggests that person in later talks.") }
-        if (highlights.isNotEmpty()) item {
-            SectionHead("worth remembering")
-            highlights.forEach { mo -> MomentLine(mo, player) }
-        }
-        // The summary's to-dos replace the phrase-matched ones once there is a summary.
-        if (followUps.isNotEmpty() && m.summaryJson == null) item {
-            SectionHead("to do", note = "tap to tick")
-            followUps.forEachIndexed { i, mo ->
-                val ticked = i in done
-                Row(
-                    Modifier.fillMaxWidth().clickable { if (ticked) done.remove(i) else done.add(i) }.padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.Top,
-                ) {
-                    Box(Modifier.padding(top = 2.dp).size(20.dp).border(1.6.dp, burrow.ink, RoundedCornerShape(4.dp)), contentAlignment = Alignment.Center) {
-                        if (ticked) DoodleIcon(Doodle.TICK, null, size = 22.dp, stroke = 2.4.dp)
+            when (view) {
+                TalkView.SUMMARY -> {
+                    item { SummarySection(m, onSeek = seek, open = open, highlights = highlights) }
+                    item { WhoWasThere(speakers, profiles, onAssign, open) }
+                }
+                TalkView.TODOS -> item {
+                    TodosSection(m, followUps, speakerName = { lookFor(it, speakers, profiles).name }, onSeek = seek)
+                }
+                TalkView.TRANSCRIPT -> {
+                    item {
+                        if (wide && speakers.isNotEmpty()) {
+                            Lanes(utterances, speakers, profiles, m.durationSec, player)
+                            Spacer(Modifier.height(12.dp))
+                        }
+                        HandField(filter, { filter = it }, placeholder = "search what was said", singleLine = true, leading = Doodle.SEARCH)
+                        Spacer(Modifier.height(8.dp))
+                        if (utterances.isEmpty()) Body("No speech was found in this recording.", color = burrow.pencil)
                     }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            mo.text,
-                            style = Hand.label.copy(textDecoration = if (ticked) TextDecoration.LineThrough else null),
-                            color = if (ticked) burrow.graphite else burrow.ink,
-                        )
-                        Meta("${lookFor(mo.speaker, speakers, profiles).name} · ${formatClock(mo.start)}")
+                    itemsIndexed(shown, key = { i, u -> "${u.start}-$i" }) { _, u ->
+                        Line(u, lookFor(u.speaker, speakers, profiles), isActive = active != null && utterances.getOrNull(active) == u) { player.seek(u.start, andPlay = true) }
                     }
                 }
             }
         }
     }
-    val transcript: LazyListScope.() -> Unit = {
-        item {
-            SectionHead("every word", note = "${utterances.size} turns")
-            Spacer(Modifier.height(8.dp))
-            HandField(filter, { filter = it }, placeholder = "find in this talk", singleLine = true, leading = Doodle.SEARCH)
-        }
-        itemsIndexed(shown, key = { i, u -> "${u.start}-$i" }) { _, u ->
-            Line(u, lookFor(u.speaker, speakers, profiles), isActive = active != null && utterances.getOrNull(active) == u) { player.seek(u.start) }
-        }
-        if (utterances.isEmpty()) item { Meta("No speech was found in this recording.") }
-    }
+}
 
-    val pad = PaddingValues(start = Gutter, end = Gutter, top = 4.dp, bottom = 40.dp)
-    if (wide) {
-        Row(Modifier.fillMaxSize()) {
-            LazyColumn(Modifier.weight(1f).fillMaxHeight(), contentPadding = pad, verticalArrangement = Arrangement.spacedBy(16.dp), content = overview)
-            LazyColumn(Modifier.weight(1f).fillMaxHeight(), contentPadding = pad, verticalArrangement = Arrangement.spacedBy(10.dp), content = transcript)
-        }
-    } else {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            LazyColumn(Modifier.widthIn(max = MaxColumn + Gutter * 2).fillMaxSize(), contentPadding = pad, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                overview()
-                transcript()
-            }
-        }
-    }
+/** "Sat 31 Oct", with the year only when it isn't this year. */
+fun talkDate(context: android.content.Context, millis: Long): String {
+    val d = java.time.Instant.ofEpochMilli(millis).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+    val pattern = if (d.year == java.time.LocalDate.now().year) "EEE d MMM" else "EEE d MMM yyyy"
+    return d.format(java.time.format.DateTimeFormatter.ofPattern(pattern, java.util.Locale.getDefault()))
 }
 
 /** A drawn play circle and a scrub line; tap the line to jump. */
@@ -381,57 +400,54 @@ private fun WhoWasThere(speakers: List<MeetingSpeakerEntity>, profiles: List<Pro
     val total = speakers.sumOf { it.talkSec }.coerceAtLeast(1e-6)
     SectionHead("who was there")
     if (speakers.isEmpty()) {
-        Meta("No distinct voices found.")
+        Body("No distinct voices found.", color = burrow.pencil)
         return
     }
-    Text(
-        speakers.joinToString("  ·  ") { s -> "${lookFor(s.index, speakers, profiles).name.substringBefore(' ').lowercase()} ${"%.0f".format(s.talkSec / total * 100)}%" },
-        style = Hand.label, color = burrow.ink, modifier = Modifier.padding(top = 4.dp),
-    )
-    speakers.forEach { s ->
-        val look = lookFor(s.index, speakers, profiles)
-        val suggestion = s.suggestedProfileId?.let { id -> profiles.firstOrNull { it.id == id } }
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clickable { if (look.profile != null) open("person/${look.profile.id}") else onAssign(s) }
-                .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(look.name, style = Hand.door.copy(fontSize = 22.sp), color = burrow.ink)
-                Meta("${formatClock(s.talkSec)} of talking · ${s.words} words")
-            }
-            when {
-                look.profile == null && suggestion != null -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (suggestion.isMe) "you?" else "${suggestion.name.substringBefore(' ')}?", style = Hand.small, color = burrow.ink)
-                    DoodleButton(Doodle.TICK, "Yes, it's ${suggestion.name}", { scope.launch { people.assign(s.id, suggestion.id) } }, size = 20.dp)
-                    DoodleButton(Doodle.CROSS, "No", { scope.launch { people.dismissSuggestion(s.id) } }, size = 18.dp, color = burrow.redPen)
-                }
-                look.profile == null -> PillButton("name them", { onAssign(s) })
-                else -> DoodleIcon(Doodle.ARROW, null, size = 20.dp, color = burrow.pencil)
+    val named = speakers.filter { lookFor(it.index, speakers, profiles).profile != null }
+    if (named.isNotEmpty()) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            named.forEach { s ->
+                val look = lookFor(s.index, speakers, profiles)
+                HandTag("${look.name} · ${"%.0f".format(s.talkSec / total * 100)}%", dot = themed(look.color), onClick = { open("person/${look.profile!!.id}") })
             }
         }
     }
-}
-
-@Composable
-private fun MomentLine(mo: Moment, player: MeetingPlayer) {
-    Row(Modifier.fillMaxWidth().clickable { player.seek(mo.start) }.padding(vertical = 6.dp), verticalAlignment = Alignment.Top) {
-        Text(formatClock(mo.start), Modifier.width(52.dp).padding(top = 2.dp), style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp), color = burrow.pencil)
-        Body(mo.text, Modifier.weight(1f))
+    speakers.filter { it !in named }.forEach { s ->
+        val look = lookFor(s.index, speakers, profiles)
+        val suggestion = s.suggestedProfileId?.let { id -> profiles.firstOrNull { it.id == id } }
+        ItemRow(
+            look.name,
+            meta = "${formatClock(s.talkSec)} of talking · ${s.words} words",
+            leading = { Box(Modifier.size(10.dp).clip(CircleShape).background(themed(look.color))) },
+            trailing = {
+                if (suggestion != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (suggestion.isMe) "you?" else "${suggestion.name.substringBefore(' ')}?", style = Type.tag, color = burrow.ink)
+                    DoodleButton(Doodle.TICK, "Yes, it's ${suggestion.name}", { scope.launch { people.assign(s.id, suggestion.id) } }, size = 22.dp)
+                    DoodleButton(Doodle.CROSS, "No", { scope.launch { people.dismissSuggestion(s.id) } }, size = 20.dp, color = burrow.pencil)
+                } else HandLink("name them", { onAssign(s) })
+            },
+        )
     }
+    Caption("Name a voice once and Burrow suggests that person in later talks.", Modifier.padding(top = 4.dp))
 }
 
 @Composable
 private fun Line(u: Utterance, look: SpeakerLook, isActive: Boolean, onClick: () -> Unit) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(vertical = 4.dp)) {
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(look.name.lowercase(), style = Hand.small, color = burrow.ink, modifier = if (isActive) Modifier.marker(burrow.marker) else Modifier)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .then(if (isActive) Modifier.background(burrow.smudge) else Modifier)
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp, horizontal = if (isActive) 8.dp else 0.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(10.dp).clip(CircleShape).background(themed(look.color)))
             Spacer(Modifier.width(8.dp))
-            Meta(formatClock(u.start))
+            Text(look.name, Modifier.weight(1f), style = Type.rowTitle, color = burrow.ink, maxLines = 1)
+            Caption(formatClock(u.start))
         }
-        Body(u.text)
+        Text(u.text, Modifier.padding(top = 2.dp), style = Type.reading, color = burrow.ink)
     }
     HandDivider(seed = u.start.toInt())
 }
@@ -440,7 +456,7 @@ private fun Line(u: Utterance, look: SpeakerLook, isActive: Boolean, onClick: ()
 private fun RenameSheet(current: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var text by remember { mutableStateOf(current) }
     HandSheet(onDismiss) {
-        Text("rename this talk", style = Hand.headline.copy(fontSize = 34.sp), color = burrow.ink)
+        SheetTitle("rename this talk")
         HandField(text, { text = it }, singleLine = true)
         InkButton("save", { if (text.isNotBlank()) onSave(text.trim()) }, Modifier.fillMaxWidth(), enabled = text.isNotBlank())
     }

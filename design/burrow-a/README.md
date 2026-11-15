@@ -1,6 +1,6 @@
 # Burrow: Version A, hand-drawn minimal
 
-- `theme/`: the design theme. `THEME.md` covers the principles, tokens and components, and has screenshots of the real app; `tokens.json` holds the values; `fonts/` has the bundled fonts (Caveat, plus the body voices Inter, Nunito, Shantell Sans and Patrick Hand) with their OFL licences. The Compose version lives in `app/src/main/kotlin/…/ui/theme` and `ui/hand`.
+- `theme/`: the design theme. `THEME.md` covers the principles, tokens and components, and has screenshots of the real app; `tokens.json` holds the values; `fonts/` has the bundled fonts (Caveat, plus the body voices Nunito, Inter and Shantell Sans) with their OFL licences. The Compose version lives in `app/src/main/kotlin/…/ui/theme` and `ui/hand`.
 - `explorations/`: design explorations rendered from the real Compose code by `ExplorationTest`:
   - the five handwriting voices on Today and talk notes (`spectrum-*.png`, `voice-*.png`);
   - dark mode before and after;

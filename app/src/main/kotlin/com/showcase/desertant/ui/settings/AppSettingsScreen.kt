@@ -40,7 +40,11 @@ import androidx.compose.ui.unit.sp
 import com.showcase.desertant.app
 import com.showcase.desertant.ask.AskModel
 import com.showcase.desertant.ask.SummarySettings
+import androidx.compose.foundation.layout.heightIn
+import com.showcase.desertant.ui.hand.Caption
 import com.showcase.desertant.ui.hand.ChoicePill
+import com.showcase.desertant.ui.hand.DoneNote
+import com.showcase.desertant.ui.theme.Type
 import com.showcase.desertant.ui.hand.Doodle
 import com.showcase.desertant.ui.hand.Door
 import com.showcase.desertant.ui.hand.HandPage
@@ -62,6 +66,7 @@ fun AppSettingsScreen(onBack: () -> Unit, open: (String) -> Unit) {
     val appearance = context.app.appearance
     val mode by appearance.mode.collectAsState()
     val voice by appearance.voice.collectAsState()
+    val typeNote by appearance.typeNote.collectAsState()
     val summaries = LocalContext.current.app.summaries
     val language by summaries.language.collectAsState()
     val auto by summaries.auto.collectAsState()
@@ -70,49 +75,42 @@ fun AppSettingsScreen(onBack: () -> Unit, open: (String) -> Unit) {
 
     HandPage(onBack = onBack) {
         PageIntro("settings", "How Burrow looks, and where its privacy switches and models live.", doodle = Doodle.GEAR)
+        if (typeNote) DoneNote("Reading text is now a plain font. Change it under handwriting.", action = "ok", onAction = appearance::dismissTypeNote)
 
-        SectionHead("light or dark")
-        Meta("Burrow's own choice, whatever the phone is set to.")
-        Spacer(Modifier.height(10.dp))
+        SectionHead("light or dark", note = "Burrow's own choice, whatever the phone is set to.", first = !typeNote)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             ChoicePill("like the phone", mode == ThemeMode.SYSTEM, { appearance.setMode(ThemeMode.SYSTEM) }, leading = Doodle.PHONE)
             ChoicePill("light", mode == ThemeMode.LIGHT, { appearance.setMode(ThemeMode.LIGHT) }, leading = Doodle.SUN)
             ChoicePill("dark", mode == ThemeMode.DARK, { appearance.setMode(ThemeMode.DARK) }, leading = Doodle.MOON)
         }
 
-        Spacer(Modifier.height(24.dp))
-        SectionHead("handwriting")
-        Meta("Headlines are always hand-lettered. Pick how handwritten the smaller text under them should be.")
-        Spacer(Modifier.height(8.dp))
-        Scale(Voice.entries.indexOf(voice))
+        SectionHead("handwriting", note = "Headings stay hand-lettered. Pick the face for everything you read.")
         Voice.entries.forEach { v -> VoiceRow(v, v == voice) { appearance.setVoice(v) } }
 
-        Spacer(Modifier.height(24.dp))
-        SectionHead("summaries", note = "written on this phone")
-        Meta("Burrow writes each talk and call up: what it was about, what was decided, who does what by when. The brief on Today is built from them.")
-        Spacer(Modifier.height(10.dp))
+        SectionHead("summaries", note = "Written on this phone: what each talk was about, what was decided, who does what by when.")
+        Text("write them in", style = Hand.label, color = burrow.ink)
+        Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("write them in", Modifier.weight(1f), style = Hand.label, color = burrow.ink)
             PillButton(
                 (if (language == SummarySettings.SAME_AS_TALK) "each talk's own" else SummarySettings.LANGUAGES.firstOrNull { it.english == language }?.let { if (it.native == it.english) it.english else "${it.native} · ${it.english}" } ?: language) + " ▾",
                 { choosingLanguage = true },
             )
         }
-        SwitchRow("summarise each talk when its notes are ready", auto, summaries::setAuto, body = "Or tap “summarise” on a talk when you want one.")
+        SwitchRow("summarise each talk", auto, summaries::setAuto, body = "As soon as its notes are ready. Or tap “summarise” on a talk when you want one.")
         if (modelState !is AskModel.State.Ready) {
             Door(
-                "get the model for summaries", { open("models") },
-                meta = "${AskModel.NAME}, ${"%.1f".format(AskModel.SIZE_MB / 1000.0)} GB once — the same one ask Burrow uses",
+                "get the summary model", { open("models") },
+                meta = "${AskModel.NAME}, ${"%.1f".format(AskModel.SIZE_MB / 1000.0)} GB once. The same one ask Burrow uses.",
                 leading = { com.showcase.desertant.ui.hand.DoodleIcon(Doodle.SPARK, null, size = 26.dp) },
             )
         }
 
-        Spacer(Modifier.height(20.dp))
-        Door("privacy", { open("privacy") }, meta = "the ledger, never go online, lock, wipe everything",
+        SectionHead("more")
+        Door("privacy", { open("privacy") }, meta = "The ledger, never go online, lock, wipe everything.",
             leading = { com.showcase.desertant.ui.hand.DoodleIcon(Doodle.LOCK, null, size = 26.dp) })
-        Door("models & languages", { open("models") }, meta = "what's on the phone, speech packs for 1,600+ languages",
+        Door("models & languages", { open("models") }, meta = "What's on the phone, and speech packs for 1,600+ languages.",
             leading = { com.showcase.desertant.ui.hand.DoodleIcon(Doodle.SPARK, null, size = 26.dp) })
-        Door("logs", { open("logs") }, meta = "each step Burrow took, to copy when something fails",
+        Door("logs", { open("logs") }, meta = "Each step Burrow took, to copy when something fails.",
             leading = { com.showcase.desertant.ui.hand.DoodleIcon(Doodle.PEN, null, size = 26.dp) })
     }
     if (choosingLanguage) {
@@ -124,29 +122,6 @@ fun AppSettingsScreen(onBack: () -> Unit, open: (String) -> Unit) {
     androidx.compose.runtime.LaunchedEffect(Unit) { AskModel.refresh(context) }
 }
 
-/** A hand-drawn line from formal to handwritten, with the current stop marked. */
-@Composable
-private fun Scale(selected: Int) {
-    val ink = burrow.ink
-    val rule = burrow.rule
-    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-        Canvas(Modifier.fillMaxWidth().height(22.dp)) {
-            val y = size.height / 2
-            val n = Voice.entries.size
-            drawLine(rule, Offset(6f, y), Offset(size.width - 6f, y + 1f), 2.dp.toPx(), StrokeCap.Round)
-            for (i in 0 until n) {
-                val x = 6f + (size.width - 12f) * i / (n - 1)
-                if (i == selected) drawCircle(ink, 7.dp.toPx(), Offset(x, y))
-                else drawCircle(ink, 3.dp.toPx(), Offset(x, y))
-            }
-        }
-        Row {
-            Meta("formal", Modifier.weight(1f))
-            Meta("handwritten")
-        }
-    }
-}
-
 @Composable
 private fun VoiceRow(v: Voice, selected: Boolean, onClick: () -> Unit) {
     Row(
@@ -155,7 +130,8 @@ private fun VoiceRow(v: Voice, selected: Boolean, onClick: () -> Unit) {
             .clip(RoundedCornerShape(12.dp))
             .then(if (selected) Modifier.background(burrow.smudge) else Modifier)
             .clickable(role = Role.RadioButton, onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 10.dp),
+            .heightIn(min = 64.dp)
+            .padding(horizontal = 10.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(22.dp).border(1.8.dp, burrow.ink, CircleShape), contentAlignment = Alignment.Center) {
@@ -165,12 +141,8 @@ private fun VoiceRow(v: Voice, selected: Boolean, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(v.label, style = Hand.label, color = burrow.ink)
             // The sample is set in the voice itself, so the choice is made by looking.
-            Text(
-                "Burrow checks your photos on this phone.",
-                style = TextStyle(fontFamily = v.family, fontSize = (15 * v.scale).sp, lineHeight = (21 * v.scale).sp),
-                color = burrow.ink,
-            )
-            Meta(v.note)
+            Text("Priya promised to book the launch venue next week.", style = Type.body.copy(fontFamily = v.family), color = burrow.ink)
+            Caption(v.note)
         }
     }
 }

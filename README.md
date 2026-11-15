@@ -2,7 +2,7 @@
 
 Burrow is an Android app that handles everyday jobs end to end, using small AI models that run **only on your phone**. These are jobs people usually hand to cloud apps. It's built on the [Desert Ant Labs](https://desertant.com) on-device models (`ai.desertant:*:4.2.1`), plus open speech models for Indian and other languages.
 
-The current version is **3.9**. It uses the *hand-drawn minimal* design system in [`design/burrow-a/theme`](design/burrow-a/theme/THEME.md), and is built around the product rethink in [`design/burrow-a/PRODUCT.md`](design/burrow-a/PRODUCT.md).
+The current version is **4.0**, the readable edition: hand-drawn headings and buttons, with everything you read in a plain, legible face. It uses the *hand-drawn minimal* design system in [`design/burrow-a/theme`](design/burrow-a/theme/THEME.md), and is built around the product rethink in [`design/burrow-a/PRODUCT.md`](design/burrow-a/PRODUCT.md).
 
 **Contents:**
 - [Showcase](#showcase)
@@ -11,7 +11,7 @@ The current version is **3.9**. It uses the *hand-drawn minimal* design system i
 - [People, calls and chats](#people-speaker-profiles)
 - [Ask Burrow](#ask-burrow-on-device-tool-calling)
 - [What the models make possible](#what-the-models-make-possible)
-- [Appearance](#appearance-light-or-dark-and-a-handwriting-level)
+- [Appearance](#appearance-light-or-dark-and-a-reading-voice)
 - [Design system](#design-system)
 - [Research and decisions](#research-and-decisions)
 - [What's next](#whats-next)
@@ -22,7 +22,7 @@ The current version is **3.9**. It uses the *hand-drawn minimal* design system i
 
 ## Showcase
 
-Every screenshot here is rendered from the real Compose code with sample data, by the screenshot tests (`./gradlew testDebugUnitTest`). There are more in [`design/burrow-a/theme/shots`](design/burrow-a/theme/shots).
+Every screenshot here is rendered from the real Compose code with sample data, by the screenshot tests (`./gradlew testDebugUnitTest`). There are more in [`design/burrow-a/theme/shots`](design/burrow-a/theme/shots). They show 3.x; the 4.0 readability redesign (below) has not been re-rendered yet.
 
 <table>
 <tr>
@@ -69,19 +69,21 @@ A clickable HTML prototype of the design (17 screens, 8 journeys) is in [`design
 
 | Job | Where | Models |
 | --- | --- | --- |
-| Tidy: keep the best shot of each moment, let the rest go | photos | Eye |
-| Private sweep and vault: IDs, cards, medical and intimate photos taken out of the gallery and encrypted | photos → private things | Eye, then Moderator to confirm intimate photos |
+| Tidy: keep the best shot of each moment, let the rest go | today → tools → photos | Eye |
+| Private sweep and vault: IDs, cards, medical and intimate photos taken out of the gallery and encrypted | today → tools → photos → private sweep | Eye, then Moderator to confirm intimate photos |
 | Share safely: check a photo before it leaves | Android share sheet → *Check with Burrow* | Eye, Moderator, plus the photo's EXIF data |
 | Talks and calls: record or bring in a conversation and get a transcript, who spoke when, and a summary with decisions and to-dos in the language you choose | talks | Clear, Ear, Voz, Who, Gist, Redact; 22 Indian languages via AI4Bharat IndicConformer, others via Meta Omnilingual; summaries by Gemma 4 E2B |
 | People: name a voice once and Burrow suggests that person afterwards; their contact, call recordings and the chats you share are on their page | people | Who, plus Burrow's own voice signature |
-| Mask: swap secrets for placeholders before text goes to an AI, then put them back in the reply | today → mask, any app's text-selection menu → *Mask with Burrow* | Redact, Tongue |
-| **Brief**: talks since yesterday in a line each, and what's due now and this week | today → *your brief* | built from stored summaries |
-| **Ask**: questions about your talks, people, chats and photos, answered on the phone by a small model calling Burrow's own tools | today → *ask Burrow…* | Gemma 4 E2B (LiteRT-LM) |
+| Mask: swap secrets for placeholders before text goes to an AI, then put them back in the reply | today → tools → mask a message, any app's text-selection menu → *Mask with Burrow* | Redact, Tongue |
+| **What needs you**: due to-dos, talks that need you, private photos in plain sight, voices to name; then the new notes | today | built from stored summaries |
+| **Ask**: questions about your talks, people, chats and photos, answered on the phone by a small model calling Burrow's own tools | ask | Gemma 4 E2B (LiteRT-LM) |
 
 Navigation:
-- **Bottom bar:** four hand-lettered words, **today · photos · talks · people**. *Today* shows only what needs you right now.
+- **Bottom bar:** four hand-lettered words, **today · talks · ask · people**. *Ask* is a tab because it's the reason the notes are worth keeping.
+- **Today's tools:** *mask a message* and *photos* (tidy up, private sweep, the vault). The photos permission is asked there, the first time.
 - **Top corners:** each home page has a gear (settings) and a padlock (privacy).
-- **Every page:** opens with one sentence saying what it's for, and a doodle beside the title.
+- **One main action per page,** always the ink pill at the bottom: *record* on today and talks, the question field on ask, *copy masked text* on mask.
+- **Every page:** opens with its name and one sentence saying what it's for.
 
 ### Photos: clear the clutter
 
@@ -99,7 +101,7 @@ Uses **Eye**: scene and quality tags, faces, embeddings, `Eye.duplicates` and `E
 
 1. **Record** a meeting. It keeps going with the screen off, from a foreground service with pause/stop in the notification. You can also bring audio in three other ways:
    - **Import** any audio or video file.
-   - Bring in **call recordings** from *talks → call recordings*. Android doesn't let apps record calls, but many phones' own Phone apps can, including Samsung, Xiaomi, OnePlus, Oppo, Realme, Vivo, Honor, Huawei and Motorola. Burrow finds those recordings and voice memos using Android's recording flag and the folders these apps use.
+   - Bring in **call recordings** from *talks → import → a phone call*. Android doesn't let apps record calls, but many phones' own Phone apps can, including Samsung, Xiaomi, OnePlus, Oppo, Realme, Vivo, Honor, Huawei and Motorola. Burrow finds those recordings and voice memos using Android's recording flag and the folders these apps use.
    - **Share** any recording to Burrow (*Add to Burrow*) from any app. iPhone recordings work too, once they reach the phone through Drive, email or a computer.
 2. **Processing** happens in the background, on the phone, in this order:
    1. Ear identifies the language.
@@ -108,13 +110,11 @@ Uses **Eye**: scene and quality tags, faces, embeddings, `Eye.duplicates` and `E
    4. Gist finds topics and highlights.
    5. Burrow pulls out follow-ups.
    6. Voices are matched to people.
-3. **The meeting page** shows:
-   - the title (auto-named from the topics), date, length, language and topics;
-   - a player with a speaker timeline: tap anywhere to jump there;
-   - **Who was there**: each speaker's talk time and share, with "Sounds like Alice · 84% voice match ✓ ✗";
-   - **Highlights**: key sentences spread across the meeting;
-   - **Possible follow-ups**: commitments such as "I'll send…" or "we need to…" (English phrasing);
-   - **Transcript** as chat bubbles coloured per speaker; tap a line to play it, the current line lights up, and you can search inside it.
+3. **A talk's page** shows the title (auto-named from the topics, or the name you give it after you stop), date, length, language and topics, then three views:
+   - **summary**: the summary as plain prose, what was decided and the key points, each with the time it was said (tap to play); without a summary, the highlights Gist found; then **who was there**, with each named person's share and "Priya? ✓ ✗" suggestions for unnamed voices;
+   - **to-dos**: the summary's to-dos to tick off, or, before there is a summary, the follow-ups found by their phrasing ("I'll send…", "we need to…");
+   - **transcript**: each turn with the speaker's name and colour dot, the time, and the words at reading size; tap a turn to play from there, the current one is shaded, and you can search inside it. On wide screens a speaker timeline sits above it.
+   - *more* holds rename, language, write the notes again and delete.
 4. **Search across every transcript**, and **share notes**, optionally with names, numbers, emails and addresses **redacted on the phone first** (Redact).
 
 ### Summaries, in the language you choose
@@ -137,18 +137,18 @@ Every line carries the moment it came from; tap it to hear what was actually sai
   - **Its mistakes:** it sometimes credits a deadline to the wrong person (Marco's "Thursday" became Sam's "by Friday"), and Hindi output occasionally mixes in Latin letters.
   - **Speed:** 30–80 s per talk on that CPU. Phones should be faster on their GPU, but that's not measured yet.
 
-### The brief on Today
+### Today: what needs you
 
-*your brief* is built from stored summaries, with no model run when you open the app:
-- **since yesterday:** each talk and call in a line, plus how many decisions and to-dos it had;
-- **due now:** overdue, today and tomorrow, with "you" on your own;
-- **this week:** what's coming up.
+Today is built from stored summaries, with no model run when you open the app:
+- **N things need you** (the count gets the marker): to-dos due this week, overdue first, with "you" on your own; talks whose notes need you; private photos in plain sight; voices to name;
+- **new notes:** talks since yesterday, each with its decisions, to-dos and length, and talks still being written with a progress line;
+- **tools:** mask a message, and photos.
 
-Tap a to-do's box to tick it, or its text to open the talk. The brief only appears when there's something in it.
+Tap a to-do's box to tick it, or its text to open the talk. When nothing needs you, it says "all quiet."
 
 ### Talks in Indian and other languages
 
-Ear identifies the spoken language of each talk, and you can also set it by hand with the "language ▾" button on a talk. Burrow then picks the model that writes it:
+Ear identifies the spoken language of each talk, and you can also set it by hand from a talk's *more* sheet. Burrow then picks the model that writes it:
 
 | Language | Model (on the phone) | Download |
 | --- | --- | --- |
@@ -210,7 +210,7 @@ Who tells speakers apart within one recording. Burrow links them across recordin
 
 ### Private sweep and vault
 
-During the photo scan, Eye flags IDs and bank cards, receipts, medical photos and documents. Any photo Eye thinks might be intimate gets a second check from **Moderator**. *photos → private things* lists what it found, blurred. One move puts the photos in the **vault**:
+During the photo scan, Eye flags IDs and bank cards, receipts, medical photos and documents. Any photo Eye thinks might be intimate gets a second check from **Moderator**. *photos → private sweep* lists what it found, blurred. One move puts the photos in the **vault**:
 
 - Each photo, its thumbnail and the vault's index are encrypted with **AES-256-GCM** under a random data key.
 - That data key is stored only wrapped by an **Android Keystore** key. That key can't be exported and needs your **fingerprint or screen lock for every use**.
@@ -263,31 +263,33 @@ Deleting things:
 - **Wipe everything** forgets every analysis, talk and its audio, person and voice, the vault, the ledger and the settings. Deleting the downloaded models is an option. Your gallery isn't touched.
 - **Forget this person** deletes one person's voice and unlinks them from every talk.
 
-Permissions are requested on the *ask first* onboarding page, with one line saying why each is needed.
+Permissions are asked for when they're first needed: the microphone when you first record, photos when you first open photos, notifications when the first recording or photo look-through starts. Onboarding is three short pages: welcome, "nothing leaves this phone" (the never-go-online switch) and "one download" (the size, one button, or *later*).
 
 ### Also inside
 
 *settings → models & languages → Model lab* has a playground for each of the 11 Android models, for trying them on their own: Voz, Ear, Who, Clear, Eye, Moderator, Redact, Gist, Emo, Tongue and Shapes.
 
-## Appearance: light or dark, and a handwriting level
+## Appearance: light or dark, and a reading voice
 
 *Settings* (the gear) has two choices, both stored on the phone:
 
 - **light or dark:** *like the phone*, *light* or *dark*, independent of the system setting. The status-bar icons follow Burrow's choice.
-- **handwriting:** the body text under the hand-lettered headlines comes in five voices, from formal to fully handwritten. Each row previews itself.
+- **handwriting:** headings, buttons and navigation are always hand-lettered; the face you read in comes in three voices, each row showing a live sample.
 
 | Voice | Font | Feel |
 | --- | --- | --- |
-| formal | Inter | crisp UI sans (Burrow 3.0–3.2) |
-| friendly | Nunito | rounded sans |
-| **neat hand** (default) | Shantell Sans, informality 0 | marker-neat; bridges Caveat and a sans |
-| loose hand | Shantell Sans, informality 100 | bouncier, more personal |
-| all handwritten | Patrick Hand | a notebook throughout |
+| **friendly** (default) | Nunito | rounded, warm next to Caveat |
+| formal | Inter | the crispest |
+| neat hand | Shantell Sans, informality 0 | handwriting throughout, still on a straight baseline |
 
-**Why there are voices.** Caveat headlines over Inter body text jumped from 100% casual to 100% formal. The middle voices close that gap. Here are the same screens in all five voices, left to right:
+**Why 4.0 changed the type.** By 3.9 almost every sentence on a page was 13–15 sp grey handwriting, and anything bigger was cursive Caveat, including talk titles, people's names, model sizes and file names. Caveat's x-height is two thirds of a sans at the same size, so at 18–23 sp it reads like 12–15 sp. 4.0 follows the platform's readability review (`baseApp/design/REVIEW.md`, tokens 2.0.0):
+- Caveat only for the app's own short words, never under 24 sp, never for data or anything you wrote;
+- reading text at 16 sp (17 for summaries, transcripts and answers) in ink; meta lines 14, nothing under 13;
+- darker grey (pencil 7.5:1, placeholders 5.3:1), and disabled buttons drawn in graphite instead of faded to 2:1;
+- every tap target at least 48 dp; one marker per screen, on a fact; red only for "!" and destructive actions;
+- "loose hand" and "all handwritten" removed. Every install moves to *friendly* once on the first start of 4.0 (all earlier installs had *neat hand* stored), and the settings page says so once.
 
-![Today in five voices](design/burrow-a/explorations/spectrum-today.png)
-![Talk notes in five voices](design/burrow-a/explorations/spectrum-notes.png)
+The earlier five-voice exploration is kept for reference: [`spectrum-today.png`](design/burrow-a/explorations/spectrum-today.png), [`spectrum-notes.png`](design/burrow-a/explorations/spectrum-notes.png).
 
 **Why dark mode changed.** In 3.2, dark mode was near-white on near-black.
 - Thin hand-drawn strokes bloomed and blurred.
@@ -297,7 +299,7 @@ Permissions are requested on the *ask first* onboarding page, with one line sayi
 In 3.3, dark mode is a warm charcoal "night notebook":
 - paper `#1E1D1B` and ink `#E8E3D8`, about 12:1 contrast;
 - a toned-down marker `#D9BF45`;
-- visible wells (`#2D2B28`) and rules (ink at 30%);
+- visible wells (`#2D2B28`) and rules (ink at 30%, 35% from 4.0);
 - every text colour passes WCAG AA.
 
 | before (3.2) | after (3.3) |
@@ -314,12 +316,12 @@ The *hand-drawn minimal* design system is documented in [`design/burrow-a/theme/
 - no cards and no shadows;
 - words for navigation;
 - photos shown as small tilted snapshots;
-- red pen only for private or destructive states.
+- red pen only for the "!" mark and destructive actions.
 
-**Type:**
-- **Caveat** for headlines, numbers, buttons and navigation;
-- the chosen **body voice** (above) for explanations and meta lines;
-- monospace for placeholders like `[NAME_1]` and for timestamps.
+**Type** (named styles in `Theme.kt`; no font size is written anywhere else):
+- **Caveat** (`Hand.*`, 24 sp and up) for the wordmark, page titles, section heads, places, buttons, links and navigation;
+- the chosen **body voice** (`Type.*`) for everything you read: `contentTitle` 22, `reading` 17, `rowTitle` 17, `body` 16, `meta` 14, `caption` and `tag` 13;
+- monospace 13 for placeholders like `[NAME_1]` and tool calls.
 
 All fonts are bundled under the SIL Open Font License; the licences are in `design/burrow-a/theme/fonts/`.
 
@@ -329,7 +331,8 @@ All fonts are bundled under the SIL Open Font License; the licences are in `desi
 - The greeting gets a sun or a moon.
 
 **Components** (`ui/hand`):
-- `HandPage`, `PageIntro`, `InkButton`, `PillButton`, `ChoicePill`, `HandLink`, `Door`;
+- `HandPage`, `PageIntro`, `InkButton`, `PillButton`, `ChoicePill`, `HandLink`, `Door` (places in the app);
+- `ItemRow` (content: talks, people, models, files), `Prose` (summaries and answers, with a little Markdown), `Warning`;
 - `HandSwitch`, `HandField`, `HandTag`, `Steps`, `Snapshot`, `HandNav`, `HandSheet` and more.
 
 The theme lives in `ui/theme`: `Theme.kt` for colours, type and voices, and `Appearance.kt` for the stored setting and system bars.
@@ -507,6 +510,7 @@ The original concept screens are in `design/burrow-a/explorations/ask-concept-*.
 | 3.7 | **Summaries**: gist, decisions, key points and to-dos for every talk and call, written on the phone by Gemma, in a language you choose (25, or each talk's own), with every line linked to its moment; due dates worked out in code; **the brief** on Today. Database v5 |
 | 3.8 | **Shared models**: Desert Ant models, speech packs and Gemma live in the platform's shared model store, so another app of the vendor on the phone (PhoneDots) hands them over instead of downloading them again; resumable, SHA-256-checked downloads. **Logs** (settings → logs, copy all) for bug reports. Every build signed with the vendor key |
 | 3.9 | **Keeps going in the background**: while a model or speech pack downloads, or Burrow writes an answer, an ongoing notification (with progress) keeps Android from pausing it and the phone from sleeping mid-way |
+| 4.0 | **Readability redesign** (tokens 2.0.0): everything you read is a plain sans in ink (Nunito by default, migrated once), Caveat only for headings and buttons at 24 sp and up, darker greys, 48 dp targets, drawn disabled states. Tabs are **today · talks · ask · people**; photos and mask moved to today's tools. Today shows what needs you, new notes and tools under one *record* pill; talks has search, one *import* sheet and the *record* pill; a talk is summary · to-dos · transcript with the summary as prose and options in a *more* sheet; ask puts the answer first, steps behind a link and changes in a confirm sheet; people and person pages use plain rows; mask opens one stage at a time; models get capitals and one *download all*; setup is three short pages and permissions are asked on first use |
 
 Release APKs are built into `dist/`, which is git-ignored.
 

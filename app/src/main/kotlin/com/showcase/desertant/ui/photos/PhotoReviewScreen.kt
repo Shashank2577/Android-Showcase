@@ -61,6 +61,7 @@ import com.showcase.desertant.ui.hand.PickMark
 import com.showcase.desertant.ui.hand.PillButton
 import com.showcase.desertant.ui.hand.Snapshot
 import com.showcase.desertant.ui.theme.Hand
+import com.showcase.desertant.ui.theme.Type
 import com.showcase.desertant.ui.theme.burrow
 import kotlinx.coroutines.launch
 
@@ -120,7 +121,7 @@ fun PhotoReviewScreen(kind: ReviewKind, onBack: () -> Unit) {
         bottom = if (chosen.isEmpty()) null else ({
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("${chosen.size} to let go", style = Hand.door, color = burrow.ink)
+                    Text("${chosen.size} to let go", style = Type.rowTitle, color = burrow.ink)
                     Meta("${formatBytes(context, chosen.sumOf { it.sizeBytes })} · recoverable for 30 days")
                 }
                 InkButton("let them go", { moveToTrash(chosen) })
@@ -134,7 +135,7 @@ fun PhotoReviewScreen(kind: ReviewKind, onBack: () -> Unit) {
                 HandEmpty("all tidy.", "Nothing left to look at here.", doodle = Doodle.TICK)
             kind == ReviewKind.SIMILAR -> {
                 val n = groups.size.toString()
-                MarkedText("keep the best of $n moments", mark = n, style = Hand.headline.copy(fontSize = 40.sp, lineHeight = 42.sp))
+                MarkedText("keep the best of $n moments", mark = n, style = Hand.headline)
                 Body("Burrow starred the best shot of each moment and ticked the rest to let go. Tap a photo to switch between keep and let go; the eye shows it larger.", Modifier.padding(top = 6.dp), color = burrow.pencil)
                 Spacer(Modifier.height(20.dp))
                 groups.forEach { g ->
@@ -188,8 +189,8 @@ private fun Moment(
     val context = LocalContext.current
     Row(verticalAlignment = Alignment.Bottom) {
         Column(Modifier.weight(1f)) {
-            Text("${relativeDay(group.best.dateTaken).lowercase()} — ${group.photos.size} shots", style = Hand.door, color = burrow.ink)
-            Meta("keep: ${group.bestReason.lowercase()} · frees ${formatBytes(context, group.extras.filter(selected).sumOf { it.sizeBytes })}")
+            Text("${relativeDay(group.best.dateTaken)} · ${group.photos.size} shots", style = Type.rowTitle, color = burrow.ink)
+            Meta("Keep: ${group.bestReason.lowercase()} · frees ${formatBytes(context, group.extras.filter(selected).sumOf { it.sizeBytes })}")
         }
         PillButton("keep all", onKeepAll)
     }
@@ -225,10 +226,10 @@ private fun Tile(p: PhotoEntity, selected: Boolean, best: Boolean, tilt: Float, 
         Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 when { selected -> "let go"; best -> "best · keep"; else -> "keep" },
-                style = Hand.small, color = if (selected) burrow.redPen else burrow.ink,
+                style = Type.tag, color = burrow.ink,
             )
             Spacer(Modifier.width(4.dp))
-            Box(Modifier.size(32.dp).clip(CircleShape).clickable(onClick = onPreview), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onPreview), contentAlignment = Alignment.Center) {
                 DoodleIcon(Doodle.EYE, "Look closer", size = 18.dp, color = burrow.pencil)
             }
         }

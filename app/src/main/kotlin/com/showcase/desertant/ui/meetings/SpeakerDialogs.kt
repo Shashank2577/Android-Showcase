@@ -43,6 +43,8 @@ import com.showcase.desertant.ui.hand.InkButton
 import com.showcase.desertant.ui.hand.Meta
 import com.showcase.desertant.ui.hand.SwitchRow
 import com.showcase.desertant.ui.theme.Hand
+import com.showcase.desertant.ui.hand.SheetTitle
+import com.showcase.desertant.ui.theme.Type
 import com.showcase.desertant.ui.theme.burrow
 import kotlinx.coroutines.launch
 
@@ -66,7 +68,7 @@ fun AssignSpeakerDialog(speaker: MeetingSpeakerEntity, profiles: List<ProfileEnt
     val ready = (choice == NEW && newName.isNotBlank()) || (choice != null && choice != NEW)
 
     HandSheet(onDismiss) {
-        Text("who is this voice?", style = Hand.headline.copy(fontSize = 34.sp), color = burrow.ink)
+        SheetTitle("who is this voice?")
         speaker.sampleQuote?.let { Body("“$it”") }
         Meta(
             if (learn) "Pick a person. Burrow learns their voice from this talk, so it can suggest them next time."
@@ -115,7 +117,7 @@ private fun Choice(title: String, note: String?, selected: Boolean, onClick: () 
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = Hand.door.copy(fontSize = 23.sp), color = burrow.ink)
+            Text(title, style = Type.rowTitle, color = burrow.ink)
             if (note != null) Meta(note)
         }
     }

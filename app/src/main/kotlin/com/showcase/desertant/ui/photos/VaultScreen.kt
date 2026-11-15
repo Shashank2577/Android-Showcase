@@ -66,6 +66,7 @@ import com.showcase.desertant.ui.hand.Body
 import com.showcase.desertant.ui.hand.ConfirmSheet
 import com.showcase.desertant.ui.hand.DoneNote
 import com.showcase.desertant.ui.hand.Doodle
+import com.showcase.desertant.ui.hand.Warning
 import com.showcase.desertant.ui.hand.DoodleIcon
 import com.showcase.desertant.ui.hand.HandLink
 import com.showcase.desertant.ui.hand.HandPage
@@ -79,6 +80,8 @@ import com.showcase.desertant.ui.hand.Snapshot
 import com.showcase.desertant.ui.hand.Steps
 import com.showcase.desertant.ui.privacy.SecureScreen
 import com.showcase.desertant.ui.theme.Hand
+import com.showcase.desertant.ui.hand.SheetTitle
+import com.showcase.desertant.ui.theme.Type
 import com.showcase.desertant.ui.theme.burrow
 import kotlinx.coroutines.launch
 
@@ -158,10 +161,10 @@ fun VaultScreen(onBack: () -> Unit) {
                 )
                 Spacer(Modifier.height(20.dp))
                 if (!vault.available()) {
-                    Body(VaultOpen.NoScreenLock.problem()!!, color = burrow.redPen)
+                    Warning(VaultOpen.NoScreenLock.problem()!!)
                 } else {
                     InkButton("open with your fingerprint", ::open, Modifier.fillMaxWidth(), busy = opening, trailing = Doodle.LOCK_OPEN)
-                    problem?.problem()?.let { Body(it, Modifier.padding(top = 12.dp), color = burrow.redPen) }
+                    problem?.problem()?.let { Warning(it, Modifier.padding(top = 12.dp)) }
                     if (problem == VaultOpen.KeyLost) PillButton("start a new, empty vault", { confirmReset = true }, Modifier.padding(top = 10.dp), color = burrow.redPen)
                 }
                 Spacer(Modifier.height(24.dp))
@@ -177,7 +180,7 @@ fun VaultScreen(onBack: () -> Unit) {
                 )
             }
             else -> {
-                PageIntro("the vault", "Open until you leave Burrow. Tap a photo to see it, put it back in the gallery, or delete it for good.", mark = "vault")
+                PageIntro("the vault", "Open until you leave Burrow. Tap a photo to see it, put it back in the gallery, or delete it for good.")
                 note?.let { DoneNote(it, Modifier.padding(bottom = 14.dp)) }
                 if (items.isEmpty()) {
                     Body("Nothing in here yet. Tap “add photos” below, or use the private sweep on the photos page.", color = burrow.pencil)
@@ -260,7 +263,7 @@ private fun VaultViewer(item: VaultItem, onDismiss: () -> Unit, onExport: () -> 
             photo?.let { Image(it.asImageBitmap(), item.name, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
                 ?: Meta("opening…")
         }
-        Text(item.kind ?: "private photo", style = Hand.door, color = burrow.ink)
+        Text((item.kind ?: "private photo").replaceFirstChar { it.uppercase() }, style = Type.rowTitle, color = burrow.ink)
         Meta("added ${relativeDay(item.addedAt).lowercase()} · ${formatBytes(context, item.bytes)}")
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             PillButton("back to gallery", onExport, Modifier.weight(1f), leading = Doodle.SHARE)
@@ -289,7 +292,7 @@ private fun AddToVaultSheet(onDismiss: () -> Unit, onAdd: (List<PhotoEntity>) ->
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted = allowed() }
     LaunchedEffect(granted) { if (granted) photos = PhotoLibrary.photos(context, PhotoScope(days = null)) }
     HandSheet(onDismiss) {
-        Text("add to the vault", style = Hand.headline.copy(fontSize = 34.sp), color = burrow.ink)
+        SheetTitle("add to the vault")
         Steps(listOf("Tick the photos to lock away", "Burrow encrypts copies in the vault", "Android asks to delete the originals — say yes"))
         if (!granted) {
             Body("Burrow needs to see your photos to list them here.", color = burrow.pencil)

@@ -41,6 +41,7 @@ import com.showcase.desertant.ui.hand.Meta
 import com.showcase.desertant.ui.hand.PageIntro
 import com.showcase.desertant.ui.hand.SectionHead
 import com.showcase.desertant.ui.theme.Hand
+import com.showcase.desertant.ui.theme.Type
 import com.showcase.desertant.ui.theme.burrow
 import kotlinx.coroutines.launch
 
@@ -99,15 +100,13 @@ fun AudioImportContent(fileName: String, profiles: List<ProfileEntity>, busy: Bo
         },
     ) {
         PageIntro("add a recording", "Burrow writes its notes on this phone, like any talk. A call goes on the page of the person it was with.", doodle = Doodle.MIC)
-        Text(fileName, style = Hand.label, color = burrow.ink, maxLines = 2)
-        Spacer(Modifier.height(16.dp))
+        Text(fileName, style = Type.rowTitle, color = burrow.ink, maxLines = 2)
         SectionHead("what is it?")
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ChoicePill("a talk or memo", !isCall, { isCall = false }, leading = Doodle.MIC)
             ChoicePill("a phone call", isCall, { isCall = true }, leading = Doodle.PHONE)
         }
         if (isCall) {
-            Spacer(Modifier.height(16.dp))
             SectionHead("with whom?", note = if (guessCall && guessWho != null) "from the file name" else null)
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

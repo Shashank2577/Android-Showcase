@@ -30,6 +30,7 @@ import com.showcase.desertant.ui.hand.HandPage
 import com.showcase.desertant.ui.hand.Meta
 import com.showcase.desertant.ui.hand.PageIntro
 import com.showcase.desertant.ui.hand.PillButton
+import com.showcase.desertant.ui.theme.Type
 import com.showcase.desertant.ui.theme.burrow
 
 /** Burrow's step-by-step log, to copy and paste when something goes wrong. */
@@ -46,14 +47,14 @@ fun LogsScreen(onBack: () -> Unit) {
             HandLink("clear", { log.clear() })
         }
         Spacer(Modifier.height(10.dp))
-        Meta("${lines.size} line${if (lines.size == 1) "" else "s"}, newest last. Kept on this phone only.")
+        Meta("${lines.size} line${if (lines.size == 1) "" else "s"}, newest first. Kept on this phone only.")
         HandDivider()
         if (lines.isEmpty()) Meta("Nothing yet.")
         SelectionContainer {
             Text(
-                lines.joinToString("\n"),
-                style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 15.sp),
-                color = burrow.pencil,
+                lines.asReversed().joinToString("\n"),
+                style = Type.mono,
+                color = burrow.ink,
             )
         }
     }

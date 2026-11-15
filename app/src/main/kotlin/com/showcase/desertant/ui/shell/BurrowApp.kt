@@ -41,7 +41,7 @@ import com.showcase.desertant.ui.hand.DoodleIcon
 import com.showcase.desertant.ui.hand.HandNav
 import com.showcase.desertant.ui.hand.HandTab
 import com.showcase.desertant.ui.hand.InkButton
-import com.showcase.desertant.ui.hand.Meta
+import com.showcase.desertant.ui.hand.Body
 import com.showcase.desertant.ui.ask.AskScreen
 import com.showcase.desertant.ui.chats.ChatScreen
 import com.showcase.desertant.ui.labGraph
@@ -67,7 +67,7 @@ import com.showcase.desertant.ui.theme.burrow
 import com.showcase.desertant.ui.today.TodayScreen
 import kotlinx.coroutines.launch
 
-/** Whether the window is wide enough for side-by-side panes (a Fold's inner screen, tablets, landscape). */
+/** Whether the window is wide enough for side-by-side panes (a 360 list and a 480 detail: a Fold's inner screen, tablets, landscape). */
 val LocalWideLayout = staticCompositionLocalOf { false }
 
 @Composable
@@ -76,11 +76,12 @@ fun BurrowApp(hub: ModelHub, deepLink: String?, onDeepLinkHandled: () -> Unit) {
     val nav = rememberNavController()
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
-    val wide = LocalConfiguration.current.screenWidthDp >= 700
+    val wide = LocalConfiguration.current.screenWidthDp >= TWO_PANE_BREAKPOINT
     val tab = HandTab.entries.firstOrNull { it.route == route }
     val onboarded = remember { app.privacy.onboarded.value }
     val locked by app.locked.collectAsState()
-    val go: (String) -> Unit = { nav.navigate(it) { launchSingleTop = true } }
+    // A tab's route goes through the tab bar, so "voices to name" on today lands on the people tab, not on a copy of it.
+    val go: (String) -> Unit = { r -> if (HandTab.entries.any { it.route == r }) nav.switchTab(r) else nav.navigate(r) { launchSingleTop = true } }
     val back: () -> Unit = { nav.popBackStack() }
 
     LaunchedEffect(deepLink) {
@@ -101,9 +102,12 @@ fun BurrowApp(hub: ModelHub, deepLink: String?, onDeepLinkHandled: () -> Unit) {
                 }
 
                 composable(HandTab.TODAY.route) { TodayScreen(open = go) }
-                composable(HandTab.PHOTOS.route) { PhotosHome(open = go) }
                 composable(HandTab.TALKS.route) { MeetingsHome(open = go) }
+                composable(HandTab.ASK.route) { AskScreen(open = go) }
                 composable(HandTab.PEOPLE.route) { PeopleHome(open = go) }
+
+                // Reached from today → tools.
+                composable("photos") { PhotosHome(onBack = back, open = go) }
 
                 composable("photos/review/{kind}", listOf(navArgument("kind") { type = NavType.StringType })) { e ->
                     PhotoReviewScreen(ReviewKind.valueOf(e.arguments?.getString("kind") ?: ReviewKind.SIMILAR.name), onBack = back)
@@ -119,7 +123,6 @@ fun BurrowApp(hub: ModelHub, deepLink: String?, onDeepLinkHandled: () -> Unit) {
                     PersonScreen(e.arguments?.getLong("id") ?: 0, onBack = back, open = go)
                 }
                 composable("mask") { MaskScreen(onBack = back) }
-                composable("ask") { AskScreen(onBack = back, open = go) }
                 composable("chat/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
                     ChatScreen(e.arguments?.getLong("id") ?: 0, onBack = back, open = go)
                 }
@@ -154,12 +157,15 @@ private fun LockScreen(onUnlocked: () -> Unit) {
         ) {
             DoodleIcon(Doodle.LOCK, null, size = 84.dp, stroke = 2.4.dp)
             Text("burrow is locked.", style = Hand.headline, color = burrow.ink)
-            Meta("Your photos, talks and people stay hidden until you confirm it's you.")
+            Body("Your photos, talks and people stay hidden until you confirm it's you.", textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             Spacer(Modifier.height(8.dp))
             InkButton("unlock", { ask() }, Modifier.fillMaxWidth())
         }
     }
 }
+
+/** Two panes from here: a 360 list and at least a 480 detail. */
+const val TWO_PANE_BREAKPOINT = 840
 
 private fun NavHostController.switchTab(route: String) = navigate(route) {
     popUpTo(graph.findStartDestination().id) { saveState = true }

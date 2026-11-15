@@ -45,7 +45,18 @@ import androidx.core.content.ContextCompat
 import com.showcase.desertant.audio.formatClock
 import com.showcase.desertant.meetings.RecorderService
 import com.showcase.desertant.meetings.RecorderState
+import androidx.compose.runtime.rememberCoroutineScope
+import com.showcase.desertant.app
+import com.showcase.desertant.ui.hand.Body
 import com.showcase.desertant.ui.hand.Doodle
+import com.showcase.desertant.ui.hand.HandLink
+import com.showcase.desertant.ui.hand.HandSheet
+import com.showcase.desertant.ui.hand.InkButton
+import com.showcase.desertant.ui.hand.PageIntro
+import com.showcase.desertant.ui.hand.SheetTitle
+import com.showcase.desertant.ui.hand.Steps
+import com.showcase.desertant.ui.hand.Warning
+import kotlinx.coroutines.launch
 import com.showcase.desertant.ui.hand.DoodleButton
 import com.showcase.desertant.ui.hand.DoodleIcon
 import com.showcase.desertant.ui.hand.HandField
@@ -58,60 +69,85 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 
+/**
+ * Record: the timer, one sentence, pause and stop. Naming comes after you
+ * stop (or Burrow names it from the topics). Calls are explained in a sheet.
+ */
 @Composable
 fun RecordScreen(onBack: () -> Unit, onSaved: () -> Unit) {
     val context = LocalContext.current
+    val db = context.app.db
+    val scope = rememberCoroutineScope()
     val state by RecorderService.state.collectAsState()
     var title by rememberSaveable { mutableStateOf("") }
-    var wasRecording by remember { mutableStateOf(false) }
+    var savedId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var lastId by rememberSaveable { mutableStateOf<Long?>(null) }
     var denied by remember { mutableStateOf(false) }
+    var calls by remember { mutableStateOf(false) }
 
     val permissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        if (result[Manifest.permission.RECORD_AUDIO] == true) RecorderService.start(context, title) else denied = true
+        if (result[Manifest.permission.RECORD_AUDIO] == true) RecorderService.start(context, null) else denied = true
     }
     fun start() {
         val mic = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         val notify = Build.VERSION.SDK_INT < 33 ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-        if (mic && notify) RecorderService.start(context, title)
+        // The microphone (and the notification that keeps a long recording going) are asked for here, the first time.
+        if (mic && notify) RecorderService.start(context, null)
         else permissions.launch(
             if (Build.VERSION.SDK_INT >= 33) arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS)
             else arrayOf(Manifest.permission.RECORD_AUDIO),
         )
     }
 
-    // Leave once a recording we were showing has been saved.
+    // Once a recording we were showing has been saved, ask for a name.
     LaunchedEffect(state) {
-        if (state is RecorderState.Recording) wasRecording = true
-        else if (wasRecording) onSaved()
+        val r = state as? RecorderState.Recording
+        if (r != null) lastId = r.meetingId
+        else if (lastId != null && savedId == null) savedId = lastId
     }
 
     val recording = state as? RecorderState.Recording
+    val saved = savedId
+    if (saved != null && recording == null) {
+        HandPage(
+            onBack = onSaved,
+            bottom = {
+                InkButton(
+                    "save",
+                    { scope.launch { if (title.isNotBlank()) db.meetings().rename(saved, title.trim()); onSaved() } },
+                    Modifier.widthIn(max = 400.dp).fillMaxWidth(),
+                )
+                HandLink("skip", onSaved)
+            },
+        ) {
+            PageIntro("name it", "Or skip, and Burrow names it from what was said.")
+            HandField(title, { title = it }, placeholder = "Q3 roadmap sync", singleLine = true)
+            Spacer(Modifier.height(16.dp))
+            Body("The notes are being written on this phone. You'll find them in talks.", color = burrow.pencil)
+        }
+        return
+    }
+
     HandPage(onBack = onBack) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            if (recording == null) {
-                HandField(title, { title = it }, placeholder = "a name, if you like — or Burrow names it from the topics", singleLine = true)
-            } else if (title.isNotBlank()) {
-                Text(title, style = Hand.title, color = burrow.ink, textAlign = TextAlign.Center)
-            }
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(8.dp))
             Box(Modifier.widthIn(max = 340.dp).fillMaxWidth().aspectRatio(1f), contentAlignment = Alignment.Center) {
                 VoiceRing(recording?.levels.orEmpty(), active = recording != null && !recording.paused, Modifier.matchParentSize())
-                Text(formatClock((recording?.elapsedMs ?: 0) / 1000.0), style = Hand.display.copy(fontSize = 76.sp, lineHeight = 76.sp), color = burrow.ink)
+                Text(formatClock((recording?.elapsedMs ?: 0) / 1000.0), style = Hand.display, color = burrow.ink)
             }
             Spacer(Modifier.height(8.dp))
             Text(
                 when {
-                    denied -> "Burrow needs the microphone to record."
-                    recording?.paused == true -> "paused."
-                    recording != null -> "listening… stays on this phone"
-                    else -> "ready when you are."
+                    recording?.paused == true -> "paused"
+                    recording != null -> "listening"
+                    else -> "ready when you are"
                 },
                 style = Hand.door,
-                color = if (denied) burrow.redPen else burrow.ink,
+                color = burrow.ink,
                 textAlign = TextAlign.Center,
             )
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(24.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
                 if (recording != null) {
                     DoodleButton(
@@ -139,19 +175,28 @@ fun RecordScreen(onBack: () -> Unit, onSaved: () -> Unit) {
                     Text(if (recording != null) "stop & keep" else "record", style = Hand.label, color = burrow.ink, modifier = Modifier.padding(top = 6.dp))
                 }
             }
-            Spacer(Modifier.height(28.dp))
-            Meta(
-                if (recording != null) "Keeps going with the screen off. Notes are written on the phone after you stop."
-                else "Tell people you're recording. Put the phone where everyone can be heard.",
-                textAlign = TextAlign.Center,
+        }
+        Spacer(Modifier.height(28.dp))
+        when {
+            denied -> Warning("Burrow needs the microphone to record. Allow it in Android's settings for Burrow.")
+            recording != null -> Body("It keeps going with the screen off. The notes are written on this phone after you stop.")
+            else -> Body("Tell people you're recording.")
+        }
+        if (recording == null) HandLink("recording a phone call?", { calls = true })
+    }
+    if (calls) {
+        HandSheet({ calls = false }) {
+            SheetTitle("recording a call")
+            Body("Android doesn't let apps record calls. Many phones' own Phone apps can: Samsung, Xiaomi, OnePlus, Oppo, Realme, Vivo, Honor, Huawei and Motorola.")
+            Steps(
+                listOf(
+                    "On a Samsung: Phone → ⋮ → Settings → Record calls, and turn it on.",
+                    "Make the call. Your phone saves the recording.",
+                    "In Burrow: talks → import → a phone call.",
+                ),
             )
-            if (recording == null) {
-                Spacer(Modifier.height(10.dp))
-                Meta(
-                    "Calls: Android doesn't let apps record calls. Record them in your phone app if it can, then bring them in from talks — or share any recording to Burrow.",
-                    textAlign = TextAlign.Center,
-                )
-            }
+            Body("Or share any recording to Burrow from another app.", color = burrow.pencil)
+            InkButton("got it", { calls = false }, Modifier.fillMaxWidth())
         }
     }
 }

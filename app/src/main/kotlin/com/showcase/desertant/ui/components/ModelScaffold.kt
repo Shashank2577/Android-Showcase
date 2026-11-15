@@ -38,6 +38,7 @@ import com.showcase.desertant.ui.hand.Meta
 import com.showcase.desertant.ui.hand.PillButton
 import com.showcase.desertant.ui.hand.SectionHead
 import com.showcase.desertant.ui.theme.Hand
+import com.showcase.desertant.ui.theme.Type
 import com.showcase.desertant.ui.theme.burrow
 
 /** Content column width cap: comfortable on a phone, centered on a Fold's inner screen. */
@@ -50,7 +51,7 @@ fun ShowcaseScaffold(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     HandPage(onBack = onBack) {
-        Text(title.lowercase(), style = Hand.headline, color = burrow.ink)
+        Text(title, style = Hand.headline, color = burrow.ink)
         Spacer(Modifier.size(12.dp))
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) { content() }
     }
@@ -78,7 +79,7 @@ fun ModelHeader(kind: ModelKind) {
     LaunchedEffect(kind) { hub.refresh(kind) }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(kind.tagline.lowercase(), style = Hand.door, color = burrow.ink)
+        Text(kind.tagline, style = Type.rowTitle, color = burrow.ink)
         Body(kind.description, color = burrow.pencil)
         Meta("${kind.artifact} · ${kind.sizeLabel}")
         ModelStatusRow(kind, status[kind] ?: ModelStatus.Unknown) { hub.downloadInBackground(kind) }

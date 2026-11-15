@@ -22,11 +22,13 @@ import com.showcase.desertant.data.ProfileEntity
 import com.showcase.desertant.ui.common.dateTime
 import com.showcase.desertant.ui.hand.Body
 import com.showcase.desertant.ui.hand.Doodle
+import com.showcase.desertant.ui.hand.Warning
 import com.showcase.desertant.ui.hand.HandLink
 import com.showcase.desertant.ui.hand.HandSheet
 import com.showcase.desertant.ui.hand.InkButton
 import com.showcase.desertant.ui.hand.PillButton
 import com.showcase.desertant.ui.theme.Hand
+import com.showcase.desertant.ui.hand.SheetTitle
 import com.showcase.desertant.ui.theme.burrow
 import kotlinx.coroutines.launch
 
@@ -82,9 +84,9 @@ fun ShareDialog(m: MeetingEntity, speakers: List<MeetingSpeakerEntity>, profiles
     }
 
     HandSheet(onDismiss) {
-        Text("share these notes", style = Hand.headline.copy(fontSize = 34.sp), color = burrow.ink)
+        SheetTitle("share these notes")
         Body("The notes go as text to the app you pick next. Burrow can first swap names, emails, phone numbers, addresses and IDs for placeholders — on this phone, before anything leaves it.", color = burrow.pencil)
-        error?.let { Body(it, color = burrow.redPen) }
+        error?.let { Warning(it) }
         InkButton("share without personal details", { share(true) }, Modifier.fillMaxWidth(), busy = working, trailing = Doodle.SHARE)
         PillButton("share as it is", { share(false) }, Modifier.fillMaxWidth(), enabled = !working)
         HandLink("cancel", onDismiss, Modifier.align(Alignment.CenterHorizontally))

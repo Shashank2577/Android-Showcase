@@ -49,6 +49,7 @@ import com.showcase.desertant.ui.common.Thumbnail
 import com.showcase.desertant.ui.hand.Body
 import com.showcase.desertant.ui.hand.DoneNote
 import com.showcase.desertant.ui.hand.Doodle
+import com.showcase.desertant.ui.hand.Warning
 import com.showcase.desertant.ui.hand.DoodleIcon
 import com.showcase.desertant.ui.hand.HandEmpty
 import com.showcase.desertant.ui.hand.HandPage
@@ -61,6 +62,7 @@ import com.showcase.desertant.ui.hand.Snapshot
 import com.showcase.desertant.ui.hand.Steps
 import com.showcase.desertant.ui.privacy.SecureScreen
 import com.showcase.desertant.ui.theme.Hand
+import com.showcase.desertant.ui.theme.Type
 import com.showcase.desertant.ui.theme.burrow
 import kotlinx.coroutines.launch
 
@@ -142,13 +144,13 @@ fun SweepScreen(onBack: () -> Unit, openVault: () -> Unit) {
         PageIntro("found $n private photos", "Anyone scrolling your gallery could see these. Move them into the vault, where only your fingerprint opens them.", mark = n, doodle = Doodle.EYE_OFF)
         Steps(listOf("Untick any photo that isn't private", "Confirm with your fingerprint", "Android asks to delete the originals — say yes"))
         Spacer(Modifier.height(12.dp))
-        problem?.let { Body(it, Modifier.padding(bottom = 10.dp), color = burrow.redPen) }
-        if (!app.vault.available()) Body(VaultOpen.NoScreenLock.problem()!!, Modifier.padding(bottom = 10.dp), color = burrow.redPen)
+        problem?.let { Warning(it, Modifier.padding(bottom = 10.dp)) }
+        if (!app.vault.available()) Warning(VaultOpen.NoScreenLock.problem()!!, Modifier.padding(bottom = 10.dp))
         found.forEach { (kind, photos) ->
             Spacer(Modifier.height(14.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("${kind.label} — ${photos.size}", style = Hand.door, color = burrow.ink)
+                    Text("${kind.label.replaceFirstChar { it.uppercase() }} · ${photos.size}", style = Type.rowTitle, color = burrow.ink)
                     Meta(kind.why)
                 }
                 PillButton("not private", { scope.launch { app.db.photos().markNotPrivate(photos.map { it.mediaId }) } })

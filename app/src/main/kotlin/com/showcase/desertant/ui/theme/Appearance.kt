@@ -23,8 +23,32 @@ class Appearance(context: Context) {
     private val _mode = MutableStateFlow(prefs.getString(MODE, null)?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.SYSTEM)
     val mode: StateFlow<ThemeMode> = _mode.asStateFlow()
 
-    private val _voice = MutableStateFlow(prefs.getString(VOICE, null)?.let { runCatching { Voice.valueOf(it) }.getOrNull() } ?: Voice.DEFAULT)
+    init {
+        // 4.0 made reading text a plain font. Every earlier install stored "neat hand"
+        // (the old default), so changing only the default would fix nothing: move
+        // everyone to the new default once, and say so once on the settings page.
+        if (prefs.getInt(TYPE_VERSION, 1) < 2) {
+            val upgraded = prefs.contains(VOICE)
+            prefs.edit()
+                .putString(VOICE, Voice.DEFAULT.name)
+                .putInt(TYPE_VERSION, 2)
+                .putBoolean(TYPE_NOTE, upgraded)
+                .apply()
+        }
+    }
+
+    private val _voice = MutableStateFlow(Voice.fromStored(prefs.getString(VOICE, null)) ?: Voice.DEFAULT)
     val voice: StateFlow<Voice> = _voice.asStateFlow()
+
+    private val _typeNote = MutableStateFlow(prefs.getBoolean(TYPE_NOTE, false))
+
+    /** Whether to say once, on the settings page, that reading text changed to a plain font. */
+    val typeNote: StateFlow<Boolean> = _typeNote.asStateFlow()
+
+    fun dismissTypeNote() {
+        prefs.edit().putBoolean(TYPE_NOTE, false).apply()
+        _typeNote.value = false
+    }
 
     fun setMode(m: ThemeMode) {
         prefs.edit().putString(MODE, m.name).apply()
@@ -39,6 +63,8 @@ class Appearance(context: Context) {
     private companion object {
         const val MODE = "mode"
         const val VOICE = "voice"
+        const val TYPE_VERSION = "typeVersion"
+        const val TYPE_NOTE = "typeNote"
     }
 }
 

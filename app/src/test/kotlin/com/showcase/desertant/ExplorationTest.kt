@@ -38,7 +38,7 @@ import com.showcase.desertant.ui.shell.BurrowApp
 import com.showcase.desertant.ui.theme.BurrowTheme
 import com.showcase.desertant.ui.theme.ThemeMode
 import com.showcase.desertant.ui.theme.Voice
-import com.showcase.desertant.ui.theme.bodyStyle
+import com.showcase.desertant.ui.theme.Type
 import com.showcase.desertant.ui.theme.burrow
 import org.junit.Before
 import org.junit.Rule
@@ -79,13 +79,9 @@ class ExplorationTest {
     @Test fun formalToday() = today(Voice.FORMAL)
     @Test fun friendlyToday() = today(Voice.FRIENDLY)
     @Test fun neatToday() = today(Voice.NEAT)
-    @Test fun looseToday() = today(Voice.LOOSE)
-    @Test fun handwrittenToday() = today(Voice.HANDWRITTEN)
     @Test fun formalNotes() = notes(Voice.FORMAL)
     @Test fun friendlyNotes() = notes(Voice.FRIENDLY)
     @Test fun neatNotes() = notes(Voice.NEAT)
-    @Test fun looseNotes() = notes(Voice.LOOSE)
-    @Test fun handwrittenNotes() = notes(Voice.HANDWRITTEN)
 
     @Test fun settingsLight() = render("settings-light", Voice.DEFAULT) { AppSettingsScreen({}, {}) }
     @Test fun settingsDark() = render("settings-dark", Voice.DEFAULT, ThemeMode.DARK) { AppSettingsScreen({}, {}) }
@@ -138,7 +134,7 @@ private fun ToolStep(tool: String, args: String, result: String) {
                 style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp),
                 color = burrow.ink,
             )
-            Text("→ $result", style = bodyStyle(14f, 19f), color = burrow.pencil)
+            Text("→ $result", style = Type.meta, color = burrow.pencil)
         }
     }
 }

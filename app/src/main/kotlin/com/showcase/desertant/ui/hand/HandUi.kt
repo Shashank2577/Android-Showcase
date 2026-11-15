@@ -10,6 +10,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -70,7 +78,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.showcase.desertant.BuildConfig
 import com.showcase.desertant.ui.theme.Hand
+import com.showcase.desertant.ui.theme.Type
 import com.showcase.desertant.ui.theme.bodyStyle
 import com.showcase.desertant.ui.theme.burrow
 import kotlin.math.PI
@@ -80,6 +90,15 @@ import kotlin.math.sin
 /** A readable column on any width: a phone, the Fold's inner screen, landscape. */
 val MaxColumn = 560.dp
 val Gutter = 24.dp
+
+/** Long-form text (summaries, answers) is capped at about 71 characters a line. */
+val ReadingColumn = 600.dp
+
+/** The list pane in two-pane layouts; the detail takes the rest. */
+val ListPane = 360.dp
+
+/** Every tap target is at least this big. */
+val MinTap = 48.dp
 
 /** Small deterministic wobble so a stroke looks drawn, and looks the same on every frame. */
 private fun wobble(seed: Int, i: Int, amount: Float): Float {
@@ -163,6 +182,8 @@ fun MarkedText(
     textAlign: TextAlign? = null,
     maxLines: Int = Int.MAX_VALUE,
 ) {
+    // One marker per screen, on a fact: a number or a word or two, never a sentence.
+    if (BuildConfig.DEBUG && mark != null) check(mark.length <= 16) { "Marker on “$mark”: mark at most 16 characters" }
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val start = if (mark.isNullOrEmpty()) -1 else text.indexOf(mark, ignoreCase = true)
     val end = if (start < 0) -1 else start + mark!!.length
@@ -209,16 +230,109 @@ fun HandDivider(modifier: Modifier = Modifier, seed: Int = 1) {
     }
 }
 
-/** Quiet secondary text. */
+/** A meta line: the second line of a row, a note under a head. Pencil, at most two lines where it can be. */
 @Composable
 fun Meta(text: String, modifier: Modifier = Modifier, color: Color = burrow.pencil, textAlign: TextAlign? = null, maxLines: Int = Int.MAX_VALUE) {
-    Text(text, modifier, style = bodyStyle(13f, 18f), color = color, textAlign = textAlign, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+    Text(text, modifier, style = Type.meta, color = color, textAlign = textAlign, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
 }
 
-/** Explanations. */
+/** A caption: timestamps, counts, sizes, "on this phone". */
 @Composable
-fun Body(text: String, modifier: Modifier = Modifier, color: Color = burrow.ink, textAlign: TextAlign? = null) {
-    Text(text, modifier, style = bodyStyle(15f, 22f), color = color, textAlign = textAlign)
+fun Caption(text: String, modifier: Modifier = Modifier, color: Color = burrow.pencil, textAlign: TextAlign? = null, maxLines: Int = Int.MAX_VALUE) {
+    Text(text, modifier, style = Type.caption, color = color, textAlign = textAlign, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+}
+
+/** Sentences, in ink. */
+@Composable
+fun Body(text: String, modifier: Modifier = Modifier, color: Color = burrow.ink, textAlign: TextAlign? = null, maxLines: Int = Int.MAX_VALUE) {
+    Text(text, modifier, style = Type.body, color = color, textAlign = textAlign, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+}
+
+/** A warning: an ink sentence with a red-pen "!" in front. Red marks it; the words stay ink. */
+@Composable
+fun Warning(text: String, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        DoodleIcon(Doodle.EXCLAIM, null, Modifier.padding(top = 2.dp), size = 20.dp, color = burrow.redPen, stroke = 2.4.dp)
+        Spacer(Modifier.width(8.dp))
+        Body(text, Modifier.weight(1f))
+    }
+}
+
+/**
+ * Long-form text: summaries, answers, transcripts. Reading size, capped at the
+ * reading column, selectable. Understands a little Markdown: **bold**, `code`,
+ * "-" and "1." lists, "> " quotes and "#" headings (set as row titles, never Caveat).
+ */
+@Composable
+fun Prose(text: String, modifier: Modifier = Modifier, color: Color = burrow.ink) {
+    val c = burrow
+    val blocks = remember(text) { proseBlocks(text) }
+    val reading = Type.reading
+    val heading = Type.rowTitle
+    val mono = Type.mono
+    SelectionContainer(modifier.widthIn(max = ReadingColumn)) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            blocks.forEach { b ->
+                val inline = remember(b.text, c.smudge) { proseInline(b.text, mono, c.smudge) }
+                when (b.kind) {
+                    ProseKind.HEADING -> Text(inline, style = heading, color = color)
+                    ProseKind.PARAGRAPH -> Text(inline, style = reading, color = color)
+                    ProseKind.QUOTE -> Row(Modifier.height(IntrinsicSize.Min)) {
+                        Box(Modifier.width(3.dp).fillMaxHeight().background(c.rule))
+                        Spacer(Modifier.width(12.dp))
+                        Text(inline, style = reading, color = c.pencil)
+                    }
+                    ProseKind.BULLET, ProseKind.NUMBERED -> Row {
+                        Text(b.marker, Modifier.width(24.dp), style = reading, color = c.pencil)
+                        Text(inline, Modifier.weight(1f), style = reading, color = color)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private enum class ProseKind { PARAGRAPH, HEADING, QUOTE, BULLET, NUMBERED }
+
+private data class ProseBlock(val kind: ProseKind, val text: String, val marker: String = "")
+
+private val NUMBERED = Regex("""^(\d+)[.)]\s+(.*)""")
+
+private fun proseBlocks(text: String): List<ProseBlock> {
+    val out = mutableListOf<ProseBlock>()
+    val para = StringBuilder()
+    fun flush() {
+        if (para.isNotBlank()) out += ProseBlock(ProseKind.PARAGRAPH, para.toString().trim())
+        para.clear()
+    }
+    text.lines().forEach { raw ->
+        val line = raw.trim()
+        val num = NUMBERED.find(line)
+        when {
+            line.isEmpty() -> flush()
+            line.startsWith("#") -> { flush(); out += ProseBlock(ProseKind.HEADING, line.trimStart('#').trim()) }
+            line.startsWith("> ") || line == ">" -> { flush(); out += ProseBlock(ProseKind.QUOTE, line.removePrefix(">").trim()) }
+            line.startsWith("- ") || line.startsWith("* ") || line.startsWith("• ") -> { flush(); out += ProseBlock(ProseKind.BULLET, line.substring(2).trim(), "•") }
+            num != null -> { flush(); out += ProseBlock(ProseKind.NUMBERED, num.groupValues[2], "${num.groupValues[1]}.") }
+            else -> { if (para.isNotEmpty()) para.append(' '); para.append(line) }
+        }
+    }
+    flush()
+    return out
+}
+
+private val INLINE = Regex("""\*\*(.+?)\*\*|`([^`]+)`""")
+
+private fun proseInline(text: String, mono: TextStyle, well: Color): AnnotatedString = buildAnnotatedString {
+    var at = 0
+    INLINE.findAll(text).forEach { m ->
+        append(text.substring(at, m.range.first))
+        val bold = m.groups[1]
+        if (bold != null) withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(bold.value) }
+        else withStyle(SpanStyle(fontFamily = mono.fontFamily, background = well)) { append(m.groups[2]!!.value) }
+        at = m.range.last + 1
+    }
+    append(text.substring(at))
 }
 
 /** The primary action: a black pill with hand-lettered white text. One per screen. */
@@ -234,23 +348,24 @@ fun InkButton(
 ) {
     val c = burrow
     val bg = if (danger) c.redPen else c.ink
+    // Disabled is drawn, not faded: a smudge pill with a graphite outline and label, still readable.
+    val fg = if (enabled) c.paper else c.graphite
     Row(
         modifier
             .heightIn(min = 56.dp)
-            .alpha(if (enabled) 1f else 0.35f)
             .clip(CircleShape)
-            .background(bg)
+            .then(if (enabled) Modifier.background(bg) else Modifier.background(c.smudge).border(1.6.dp, c.graphite, CircleShape))
             .clickable(enabled = enabled && !busy, role = Role.Button, onClick = onClick)
             .padding(horizontal = 28.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (busy) {
-            CircularProgressIndicator(Modifier.size(18.dp), color = c.paper, strokeWidth = 2.dp)
+            CircularProgressIndicator(Modifier.size(18.dp), color = fg, strokeWidth = 2.dp)
             Spacer(Modifier.width(12.dp))
         }
-        Text(text, style = Hand.label.copy(fontSize = 23.sp), color = c.paper, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (trailing != null) {
+        Text(text, style = Hand.label, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (trailing != null && enabled) {
             Spacer(Modifier.width(10.dp))
             DoodleIcon(trailing, null, size = 20.dp, color = c.paper)
         }
@@ -260,14 +375,16 @@ fun InkButton(
 /** The secondary action: hand-lettered text with a wobbly underline. */
 @Composable
 fun HandLink(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, color: Color = burrow.ink, enabled: Boolean = true, style: TextStyle = Hand.label) {
+    val shown = if (enabled) color else burrow.graphite
     Box(
         modifier
+            .defaultMinSize(MinTap, MinTap)
             .clip(RoundedCornerShape(6.dp))
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 4.dp, vertical = 8.dp)
-            .alpha(if (enabled) 1f else 0.4f),
+            .padding(horizontal = 8.dp, vertical = 10.dp),
+        contentAlignment = Alignment.CenterStart,
     ) {
-        Text(text, Modifier.handUnderline(color.copy(alpha = 0.8f), seed = text.length), style = style, color = color)
+        Text(text, Modifier.handUnderline(shown.copy(alpha = 0.8f), seed = text.length), style = style, color = shown)
     }
 }
 
@@ -303,15 +420,16 @@ fun SwitchRow(title: String, checked: Boolean, onCheckedChange: (Boolean) -> Uni
         modifier
             .fillMaxWidth()
             .toggleable(checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange)
+            .heightIn(min = 64.dp)
             .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (doodle != null) {
-            DoodleIcon(doodle, null, size = 26.dp)
+            DoodleIcon(doodle, null, size = 24.dp)
             Spacer(Modifier.width(14.dp))
         }
         Column(Modifier.weight(1f)) {
-            Text(title, style = Hand.door.copy(fontSize = 24.sp), color = burrow.ink)
+            Text(title, style = Hand.door, color = if (enabled) burrow.ink else burrow.graphite)
             if (body != null) Meta(body)
         }
         Spacer(Modifier.width(12.dp))
@@ -320,8 +438,9 @@ fun SwitchRow(title: String, checked: Boolean, onCheckedChange: (Boolean) -> Uni
 }
 
 /**
- * A door: one big hand-lettered line that leads somewhere, with a drawn arrow.
- * Today and the Photos page are made of these.
+ * A door: a hand-lettered line that leads to one of the app's own places
+ * ("mask a message", "photos", "privacy"), with a drawn, circled arrow. Content
+ * (talks, people, models, files) uses [ItemRow] instead.
  */
 @Composable
 fun Door(
@@ -331,12 +450,13 @@ fun Door(
     mark: String? = null,
     meta: String? = null,
     alert: Boolean = false,
-    style: TextStyle = Hand.door.copy(fontSize = 28.sp, lineHeight = 32.sp),
+    style: TextStyle = Hand.door,
     leading: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier
             .fillMaxWidth()
+            .heightIn(min = 64.dp)
             .clip(RoundedCornerShape(10.dp))
             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
             .padding(vertical = 12.dp),
@@ -349,7 +469,7 @@ fun Door(
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.Top) {
                 // A door with nowhere to go is drawn in pencil, so only live ones read as tappable.
-                MarkedText(text, Modifier.weight(1f, fill = false), mark = mark, style = style, color = if (onClick != null) burrow.ink else burrow.pencil)
+                MarkedText(text, Modifier.weight(1f, fill = false), mark = mark, style = style, color = if (onClick != null) burrow.ink else burrow.pencil, maxLines = 2)
                 if (alert) DoodleIcon(Doodle.EXCLAIM, "needs you", Modifier.padding(start = 2.dp, top = 4.dp), size = 22.dp, color = burrow.redPen, stroke = 2.6.dp)
             }
             if (meta != null) Meta(meta, Modifier.padding(top = 2.dp))
@@ -363,13 +483,74 @@ fun Door(
     }
 }
 
-/** A hand-lettered section head with optional right-hand note. */
+/**
+ * A row of content: a talk, a person, a model, a file, a quote. The title is
+ * the content's own name in the body face (with its real capitals), then an
+ * optional meta line and caption. It opens something when [onClick] is set,
+ * shown by a plain pencil arrow, or carries one [trailing] widget instead.
+ * [below] adds a line under the text at full width (a progress line, a button).
+ */
 @Composable
-fun SectionHead(text: String, modifier: Modifier = Modifier, note: String? = null, mark: Boolean = false) {
-    Row(modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.Bottom) {
-        MarkedText(text, Modifier.weight(1f, fill = false), mark = if (mark) text else null, style = Hand.title.copy(fontSize = 27.sp))
-        Spacer(Modifier.weight(0.01f))
-        if (note != null) Meta(note, Modifier.padding(start = 12.dp, bottom = 4.dp))
+fun ItemRow(
+    title: String,
+    modifier: Modifier = Modifier,
+    meta: String? = null,
+    caption: String? = null,
+    onClick: (() -> Unit)? = null,
+    leading: (@Composable () -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    selected: Boolean = false,
+    titleStyle: TextStyle = Type.rowTitle,
+    titleColor: Color = burrow.ink,
+    metaLines: Int = 2,
+    below: (@Composable ColumnScope.() -> Unit)? = null,
+) {
+    val c = burrow
+    Row(
+        modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .then(if (selected) Modifier.background(c.smudge).drawBehind { drawRect(c.ink, size = androidx.compose.ui.geometry.Size(3.dp.toPx(), size.height)) } else Modifier)
+            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
+            .padding(vertical = 12.dp, horizontal = if (selected) 10.dp else 0.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (leading != null) {
+            leading()
+            Spacer(Modifier.width(14.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(title, style = titleStyle, color = titleColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (meta != null) Meta(meta, Modifier.padding(top = 2.dp), maxLines = metaLines)
+            if (caption != null) Caption(caption, Modifier.padding(top = 2.dp), maxLines = 2)
+            below?.invoke(this)
+        }
+        when {
+            trailing != null -> { Spacer(Modifier.width(12.dp)); trailing() }
+            onClick != null -> { Spacer(Modifier.width(12.dp)); DoodleIcon(Doodle.ARROW, null, size = 20.dp, color = c.pencil) }
+        }
+    }
+}
+
+/** A person's initial in a drawn 40 dp circle, to lead an [ItemRow]. */
+@Composable
+fun InitialCircle(name: String, modifier: Modifier = Modifier, size: Dp = 40.dp) {
+    Box(modifier.size(size).border(1.6.dp, burrow.ink, CircleShape), contentAlignment = Alignment.Center) {
+        Text(name.trim().take(1).uppercase().ifEmpty { "?" }, style = if (size > 48.dp) Type.contentTitle else Type.rowTitle, color = burrow.ink)
+    }
+}
+
+/**
+ * A hand-lettered section head: 40 above (16 when it's the first thing on the
+ * page), 12 below. A [note] goes on its own line underneath, never beside it.
+ * [mark] is a fact inside the head to put the one marker on ("3" in "3 to name").
+ */
+@Composable
+fun SectionHead(text: String, modifier: Modifier = Modifier, note: String? = null, mark: String? = null, first: Boolean = false) {
+    Column(modifier.fillMaxWidth().padding(top = if (first) 16.dp else 40.dp, bottom = 12.dp)) {
+        MarkedText(text, mark = mark, style = Hand.title)
+        if (note != null) Meta(note, Modifier.padding(top = 2.dp))
     }
 }
 
@@ -405,11 +586,11 @@ fun HandPage(
     ) {
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
             Row(
-                Modifier.widthIn(max = MaxColumn + Gutter * 2).fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                Modifier.widthIn(max = MaxColumn + Gutter * 2).fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (onBack != null) DoodleButton(Doodle.BACK, "Back", onBack)
-                if (wordmark) Text("burrow.", Modifier.padding(start = if (onBack == null) 12.dp else 0.dp), style = Hand.title.copy(fontSize = 30.sp), color = burrow.ink)
+                if (wordmark) Text("burrow.", Modifier.padding(start = if (onBack == null) 12.dp else 0.dp), style = Hand.title, color = burrow.ink)
                 Spacer(Modifier.weight(1f))
                 topEnd()
             }
@@ -428,7 +609,11 @@ fun HandPage(
         }
         if (bottom != null) {
             Box(Modifier.fillMaxWidth().background(burrow.paper), contentAlignment = Alignment.TopCenter) {
-                Column(Modifier.widthIn(max = MaxColumn).fillMaxWidth().padding(horizontal = Gutter, vertical = 12.dp), content = bottom)
+                Column(
+                    Modifier.widthIn(max = MaxColumn).fillMaxWidth().padding(horizontal = Gutter, vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    content = bottom,
+                )
             }
         }
     }
@@ -471,7 +656,8 @@ fun HandField(
     minHeight: Dp = 0.dp,
     leading: Doodle? = null,
     keyboardType: KeyboardType = KeyboardType.Text,
-    textStyle: TextStyle = bodyStyle(16f, 23f),
+    textStyle: TextStyle = Type.body,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     val c = burrow
     BasicTextField(
@@ -499,6 +685,10 @@ fun HandField(
                 Box(Modifier.weight(1f)) {
                     if (value.isEmpty()) Text(placeholder, style = textStyle, color = c.graphite)
                     inner()
+                }
+                if (trailing != null) {
+                    Spacer(Modifier.width(8.dp))
+                    trailing()
                 }
             }
         },
@@ -529,6 +719,12 @@ fun HandSheet(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit
     }
 }
 
+/** The title of a sheet: hand-lettered, title size. */
+@Composable
+fun SheetTitle(text: String, modifier: Modifier = Modifier) {
+    Text(text, modifier, style = Hand.title, color = burrow.ink)
+}
+
 /** A yes/no question on a sheet. The confirm button is the one ink pill. */
 @Composable
 fun ConfirmSheet(
@@ -541,8 +737,8 @@ fun ConfirmSheet(
     cancel: String = "not now",
 ) {
     HandSheet(onDismiss) {
-        Text(title, style = Hand.headline.copy(fontSize = 34.sp), color = burrow.ink)
-        Body(body, color = burrow.pencil)
+        SheetTitle(title)
+        Body(body)
         Spacer(Modifier.height(4.dp))
         InkButton(confirm, onConfirm, Modifier.fillMaxWidth(), danger = danger)
         HandLink(cancel, onDismiss, Modifier.align(Alignment.CenterHorizontally))
@@ -555,13 +751,17 @@ fun HandEmpty(title: String, body: String, modifier: Modifier = Modifier, doodle
     Column(modifier.fillMaxWidth().padding(vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         DoodleIcon(doodle, null, size = 40.dp, color = burrow.pencil)
         Text(title, style = Hand.title, color = burrow.ink, textAlign = TextAlign.Center)
-        Body(body, color = burrow.pencil, textAlign = TextAlign.Center)
+        Body(body, Modifier.widthIn(max = 280.dp), color = burrow.pencil, textAlign = TextAlign.Center)
         action()
     }
 }
 
-/** Tabs at the foot of the four homes: words, with the current one circled. */
-enum class HandTab(val route: String, val label: String) { TODAY("today", "today"), PHOTOS("photos", "photos"), TALKS("talks", "talks"), PEOPLE("people", "people") }
+/**
+ * Tabs at the foot of the four homes: words, with the current one circled.
+ * Ask is a tab because it's the reason the notes are worth keeping; photos and
+ * mask open from today's tools.
+ */
+enum class HandTab(val route: String, val label: String) { TODAY("today", "today"), TALKS("talks", "talks"), ASK("ask", "ask"), PEOPLE("people", "people") }
 
 @Composable
 fun HandNav(selected: HandTab?, onSelect: (HandTab) -> Unit, modifier: Modifier = Modifier) {
@@ -569,29 +769,32 @@ fun HandNav(selected: HandTab?, onSelect: (HandTab) -> Unit, modifier: Modifier 
     Column(modifier.fillMaxWidth().background(c.paper).navigationBarsPadding()) {
         HandDivider(Modifier.padding(horizontal = Gutter))
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+            Modifier.widthIn(max = MaxColumn + Gutter * 2).fillMaxWidth().align(Alignment.CenterHorizontally).padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             HandTab.entries.forEachIndexed { i, tab ->
-                if (i > 0) Text("·", style = Hand.label, color = c.graphite)
                 val on = tab == selected
                 val ring by animateFloatAsState(if (on) 1f else 0f, tween(450), label = "ring")
                 Box(
                     Modifier
+                        .weight(1f)
+                        .heightIn(min = 56.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .clickable(
+                        .selectable(
+                            selected = on,
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                             role = Role.Tab,
-                        ) { onSelect(tab) }
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                        ) { onSelect(tab) },
+                    contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         tab.label,
                         Modifier.handCircle(c.ink, ring, seed = i + 2),
-                        style = Hand.label.copy(fontSize = 23.sp),
+                        style = Hand.label.copy(fontWeight = if (on) FontWeight.Bold else FontWeight.SemiBold),
                         color = if (on) c.ink else c.pencil,
+                        maxLines = 1,
+                        softWrap = false,
                     )
                 }
             }
@@ -601,24 +804,39 @@ fun HandNav(selected: HandTab?, onSelect: (HandTab) -> Unit, modifier: Modifier 
 
 /** A small pill tag ("roadmap", "on this phone"). */
 @Composable
-fun HandTag(text: String, modifier: Modifier = Modifier, marked: Boolean = false, onClick: (() -> Unit)? = null) {
+fun HandTag(text: String, modifier: Modifier = Modifier, marked: Boolean = false, onClick: (() -> Unit)? = null, dot: Color? = null) {
     val c = burrow
-    Box(
-        modifier
-            .clip(CircleShape)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .then(if (marked) Modifier.background(c.marker) else Modifier.border(1.2.dp, c.rule, CircleShape))
-            .padding(horizontal = 12.dp, vertical = 3.dp),
-    ) { Text(text, style = Hand.small, color = if (marked) c.markerInk else c.ink, maxLines = 1, softWrap = false) }
+    val pill = @Composable { m: Modifier ->
+        Box(
+            m
+                .clip(CircleShape)
+                .background(if (marked) c.marker else c.smudge)
+                .padding(horizontal = 12.dp, vertical = 5.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (dot != null) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
+                    Spacer(Modifier.width(6.dp))
+                }
+                Text(text, style = Type.tag, color = if (marked) c.markerInk else c.ink, maxLines = 1, softWrap = false)
+            }
+        }
+    }
+    if (onClick == null) pill(modifier)
+    // A tappable tag keeps its small look but gets a full 48 dp hit area.
+    else Box(
+        modifier.heightIn(min = MinTap).clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { pill(Modifier) }
 }
 
 /** The "stays on this phone" stamp used in headers. */
 @Composable
 fun OnDeviceStamp(modifier: Modifier = Modifier, text: String = "on this phone") {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        DoodleIcon(Doodle.LOCK, null, size = 14.dp, color = burrow.pencil, stroke = 1.6.dp)
-        Spacer(Modifier.width(5.dp))
-        Meta(text)
+        DoodleIcon(Doodle.LOCK, null, size = 16.dp, color = burrow.pencil, stroke = 1.6.dp)
+        Spacer(Modifier.width(6.dp))
+        Caption(text)
     }
 }
 
@@ -626,22 +844,22 @@ fun OnDeviceStamp(modifier: Modifier = Modifier, text: String = "on this phone")
 /** A secondary action that still looks like a button: an outlined pill. */
 @Composable
 fun PillButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, leading: Doodle? = null, enabled: Boolean = true, color: Color = burrow.ink) {
+    val shown = if (enabled) color else burrow.graphite
     Row(
         modifier
-            .heightIn(min = 44.dp)
-            .alpha(if (enabled) 1f else 0.4f)
+            .heightIn(min = 48.dp)
             .clip(CircleShape)
-            .border(1.6.dp, color, CircleShape)
+            .border(1.6.dp, shown, CircleShape)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 8.dp),
+            .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
         if (leading != null) {
-            DoodleIcon(leading, null, size = 18.dp, color = color)
+            DoodleIcon(leading, null, size = 20.dp, color = shown)
             Spacer(Modifier.width(8.dp))
         }
-        Text(text, style = Hand.label, color = color, maxLines = 1, softWrap = false)
+        Text(text, style = Hand.label, color = shown, maxLines = 1, softWrap = false)
     }
 }
 
@@ -651,14 +869,16 @@ fun PillButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier,
  */
 @Composable
 fun PageIntro(title: String, purpose: String, modifier: Modifier = Modifier, mark: String? = null, doodle: Doodle? = null) {
-    Column(modifier.fillMaxWidth().padding(bottom = 18.dp)) {
+    Column(modifier.fillMaxWidth().padding(bottom = 24.dp)) {
         Row(verticalAlignment = Alignment.Bottom) {
             MarkedText(title, Modifier.weight(1f, fill = false), mark = mark, style = Hand.headline)
             // A small drawing of what the page is about, tilted like a margin sketch.
-            if (doodle != null) DoodleIcon(doodle, null, Modifier.padding(start = 12.dp, bottom = 6.dp).rotate(-8f), size = 40.dp, color = burrow.pencil, stroke = 1.8.dp)
+            if (doodle != null) DoodleIcon(doodle, null, Modifier.padding(start = 12.dp, bottom = 6.dp).rotate(-8f), size = 32.dp, color = burrow.pencil, stroke = 1.8.dp)
         }
-        Spacer(Modifier.height(4.dp))
-        Body(purpose, color = burrow.pencil)
+        if (purpose.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Body(purpose)
+        }
     }
 }
 
@@ -668,15 +888,15 @@ fun ChoicePill(text: String, selected: Boolean, onClick: () -> Unit, modifier: M
     val c = burrow
     Row(
         modifier
-            .heightIn(min = 44.dp)
+            .heightIn(min = 48.dp)
             .clip(CircleShape)
             .then(if (selected) Modifier.background(c.ink) else Modifier.border(1.6.dp, c.ink, CircleShape))
             .clickable(role = Role.RadioButton, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (leading != null) {
-            DoodleIcon(leading, null, size = 18.dp, color = if (selected) c.paper else c.ink)
+            DoodleIcon(leading, null, size = 20.dp, color = if (selected) c.paper else c.ink)
             Spacer(Modifier.width(8.dp))
         }
         Text(text, style = Hand.label, color = if (selected) c.paper else c.ink, maxLines = 1, softWrap = false)
@@ -686,7 +906,7 @@ fun ChoicePill(text: String, selected: Boolean, onClick: () -> Unit, modifier: M
 /** Numbered steps, so a flow says up front what will happen and in what order. */
 @Composable
 fun Steps(steps: List<String>, modifier: Modifier = Modifier, current: Int = -1) {
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         steps.forEachIndexed { i, step ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val on = i == current
@@ -696,9 +916,9 @@ fun Steps(steps: List<String>, modifier: Modifier = Modifier, current: Int = -1)
                         .clip(CircleShape)
                         .then(if (on) Modifier.background(burrow.ink) else Modifier.border(1.4.dp, burrow.ink, CircleShape)),
                     contentAlignment = Alignment.Center,
-                ) { Text("${i + 1}", style = Hand.small.copy(fontSize = 15.sp), color = if (on) burrow.paper else burrow.ink) }
-                Spacer(Modifier.width(10.dp))
-                Text(step, style = bodyStyle(14f, 19f), color = if (current < 0 || on) burrow.ink else burrow.pencil)
+                ) { Text("${i + 1}", style = Type.tag, color = if (on) burrow.paper else burrow.ink) }
+                Spacer(Modifier.width(12.dp))
+                Text(step, Modifier.weight(1f), style = Type.body, color = if (current < 0 || on) burrow.ink else burrow.pencil)
             }
         }
     }
@@ -706,17 +926,25 @@ fun Steps(steps: List<String>, modifier: Modifier = Modifier, current: Int = -1)
 
 /** A numbered section head for step-by-step pages ("1  paste it"). */
 @Composable
-fun StepHead(number: Int, text: String, modifier: Modifier = Modifier, done: Boolean = false) {
-    Row(modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+fun StepHead(number: Int, text: String, modifier: Modifier = Modifier, done: Boolean = false, onClick: (() -> Unit)? = null, open: Boolean = true) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .heightIn(min = MinTap)
+            .then(if (onClick != null) Modifier.clip(RoundedCornerShape(10.dp)).clickable(role = Role.Button, onClick = onClick) else Modifier)
+            .padding(top = 8.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Box(
-            Modifier.size(30.dp).clip(CircleShape).background(if (done) burrow.ink else burrow.paper).border(1.6.dp, burrow.ink, CircleShape),
+            Modifier.size(32.dp).clip(CircleShape).background(if (done) burrow.ink else burrow.paper).border(1.6.dp, burrow.ink, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             if (done) DoodleIcon(Doodle.TICK, null, size = 18.dp, color = burrow.paper, stroke = 2.4.dp)
-            else Text("$number", style = Hand.label, color = burrow.ink)
+            else Text("$number", style = Type.rowTitle, color = burrow.ink)
         }
         Spacer(Modifier.width(12.dp))
-        Text(text, style = Hand.title.copy(fontSize = 26.sp), color = burrow.ink)
+        Text(text, Modifier.weight(1f), style = Hand.door, color = if (open || done) burrow.ink else burrow.pencil)
+        if (onClick != null && !open) DoodleIcon(Doodle.ARROW, "open", Modifier.rotate(90f), size = 20.dp, color = burrow.pencil)
     }
 }
 
@@ -746,7 +974,7 @@ fun DoneNote(text: String, modifier: Modifier = Modifier, action: String? = null
     ) {
         DoodleIcon(Doodle.TICK, null, size = 20.dp)
         Spacer(Modifier.width(10.dp))
-        Text(text, Modifier.weight(1f), style = Hand.label, color = burrow.ink)
-        if (action != null && onAction != null) HandLink(action, onAction, style = Hand.small)
+        Text(text, Modifier.weight(1f), style = Type.body, color = burrow.ink)
+        if (action != null && onAction != null) HandLink(action, onAction)
     }
 }

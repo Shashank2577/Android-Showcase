@@ -47,6 +47,9 @@ import com.showcase.desertant.ui.hand.PillButton
 import com.showcase.desertant.ui.hand.SectionHead
 import com.showcase.desertant.ui.theme.Hand
 import com.showcase.desertant.ui.theme.bodyStyle
+import com.showcase.desertant.ui.theme.Type
+import com.showcase.desertant.ui.hand.SheetTitle
+import com.showcase.desertant.ui.hand.Caption
 import com.showcase.desertant.ui.theme.burrow
 import com.showcase.desertant.ui.theme.seriesColor
 import kotlinx.coroutines.launch
@@ -76,7 +79,6 @@ fun ChatScreen(id: Long, onBack: () -> Unit, open: (String) -> Unit) {
             doodle = Doodle.BUBBLE,
         )
         Meta("${c.messageCount} messages · ${dateTime(context, c.firstAt)} – ${dateTime(context, c.lastAt)}")
-        Spacer(Modifier.height(14.dp))
         SectionHead("who's who", note = "tap to change")
         names.forEach { n ->
             WhoRow(n.sender, n.messages, who[n.sender] ?: Who.Nobody, profiles, onClick = { choosing = n.sender }, open = open)
@@ -86,7 +88,7 @@ fun ChatScreen(id: Long, onBack: () -> Unit, open: (String) -> Unit) {
         Spacer(Modifier.height(10.dp))
         val shown = if (query.isBlank()) latest.reversed() else found
         if (query.isNotBlank()) Meta(if (found.isEmpty()) "nothing matches “$query”" else "${found.size} messages match, newest first")
-        else if (c.messageCount > latest.size) HandLink("show earlier messages", { limit += 300 }, style = Hand.small)
+        else if (c.messageCount > latest.size) HandLink("show earlier messages", { limit += 300 })
         val me = names.filter { it.isMe }.map { it.sender }.toSet()
         shown.forEach { m -> Bubble(m, mine = m.sender in me, colorIndex = names.indexOfFirst { it.sender == m.sender }) }
     }
@@ -129,13 +131,13 @@ fun WhoRow(sender: String, messages: Int, who: Who, profiles: List<ProfileEntity
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(sender, style = Hand.label, color = burrow.ink, maxLines = 1)
+            Text(sender, style = Type.rowTitle, color = burrow.ink, maxLines = 1)
             Meta("$messages messages")
         }
-        Text("→ $label", style = Hand.small, color = if (who == Who.Nobody) burrow.pencil else burrow.ink)
+        Text("→ $label", style = Type.meta, color = if (who == Who.Nobody) burrow.pencil else burrow.ink)
         if (who is Who.Person && open != null) {
             Spacer(Modifier.width(4.dp))
-            HandLink("page", { open("person/${who.id}") }, style = Hand.small)
+            HandLink("page", { open("person/${who.id}") })
         }
     }
 }
@@ -144,13 +146,13 @@ fun WhoRow(sender: String, messages: Int, who: Who, profiles: List<ProfileEntity
 @Composable
 fun WhoSheet(sender: String, profiles: List<ProfileEntity>, onDismiss: () -> Unit, onPick: (Who) -> Unit) {
     HandSheet(onDismiss) {
-        Text("who is “${sender.trim()}”?", style = Hand.headline.copy(fontSize = 32.sp), color = burrow.ink)
+        SheetTitle("who is “${sender.trim()}”?")
         Meta("Their messages go on that person's page. Burrow remembers the name, so their calls and next chats link too.")
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             PillButton("that's me", { onPick(Who.Me) }, leading = Doodle.PERSON)
             profiles.filterNot { it.isMe }.forEach { p -> PillButton(p.name, { onPick(Who.Person(p.id)) }) }
             PillButton("someone new, “${sender.trim()}”", { onPick(Who.New) }, leading = Doodle.PLUS)
-            HandLink("nobody — leave it unlinked", { onPick(Who.Nobody) }, style = Hand.small)
+            HandLink("nobody — leave it unlinked", { onPick(Who.Nobody) })
         }
     }
 }
@@ -167,8 +169,8 @@ private fun Bubble(m: ChatMessageEntity, mine: Boolean, colorIndex: Int) {
                 .then(if (mine) Modifier else Modifier.background(seriesColor(colorIndex).copy(alpha = 0.10f)))
                 .padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
-            if (!mine) Text(m.sender, style = Hand.small, color = burrow.pencil)
-            Text(m.text, style = bodyStyle(15f, 21f), color = burrow.ink)
+            if (!mine) Text(m.sender, style = Type.tag, color = burrow.pencil)
+            Text(m.text, style = Type.body, color = burrow.ink)
         }
         Meta(dateTime(context, m.at), Modifier.padding(horizontal = 6.dp))
     }
@@ -201,9 +203,8 @@ fun ChatImportContent(
         },
     ) {
         PageIntro("add a chat", "Burrow keeps this chat on the phone and puts each person's messages on their page, so you can search them and ask about them.", doodle = Doodle.BUBBLE)
-        Text(title, style = Hand.title, color = burrow.ink)
-        Meta("$messages messages · $range")
-        Spacer(Modifier.height(16.dp))
+        Text(title, style = Type.contentTitle, color = burrow.ink)
+        Caption("$messages messages · $range")
         SectionHead("who's who", note = "tap to change")
         Meta("Burrow guessed from your people and the chat's name.")
         senders.forEach { (s, n) -> WhoRow(s, n, who[s] ?: Who.Nobody, profiles, onClick = { onChoose(s) }) }
