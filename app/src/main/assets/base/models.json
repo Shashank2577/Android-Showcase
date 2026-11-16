@@ -20,7 +20,8 @@
       "minRamMb": 6000,
       "platforms": [
         "android",
-        "ios"
+        "ios",
+        "macos"
       ],
       "recommended": true,
       "source": "file",
@@ -51,7 +52,8 @@
       "minRamMb": 10000,
       "platforms": [
         "android",
-        "ios"
+        "ios",
+        "macos"
       ],
       "recommended": false,
       "source": "file",
@@ -188,7 +190,8 @@
       "minRamMb": 0,
       "platforms": [
         "android",
-        "ios"
+        "ios",
+        "macos"
       ],
       "recommended": false,
       "source": "sdk",
@@ -214,7 +217,8 @@
       "minRamMb": 0,
       "platforms": [
         "android",
-        "ios"
+        "ios",
+        "macos"
       ],
       "recommended": false,
       "source": "sdk",
@@ -240,7 +244,8 @@
       "minRamMb": 0,
       "platforms": [
         "android",
-        "ios"
+        "ios",
+        "macos"
       ],
       "recommended": false,
       "source": "sdk",
@@ -337,7 +342,8 @@
       "minRamMb": 0,
       "platforms": [
         "android",
-        "ios"
+        "ios",
+        "macos"
       ],
       "recommended": false,
       "source": "sdk",
@@ -363,7 +369,8 @@
       "minRamMb": 0,
       "platforms": [
         "android",
-        "ios"
+        "ios",
+        "macos"
       ],
       "recommended": false,
       "source": "sdk",
@@ -390,7 +397,8 @@
       "minRamMb": 0,
       "platforms": [
         "android",
-        "ios"
+        "ios",
+        "macos"
       ],
       "recommended": false,
       "source": "sdk",
@@ -416,7 +424,8 @@
       "minRamMb": 0,
       "platforms": [
         "android",
-        "ios"
+        "ios",
+        "macos"
       ],
       "recommended": false,
       "source": "sdk",
@@ -465,7 +474,8 @@
       "minRamMb": 0,
       "platforms": [
         "android",
-        "ios"
+        "ios",
+        "macos"
       ],
       "recommended": false,
       "source": "sdk",

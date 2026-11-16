@@ -6,7 +6,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 object BaseTokens {
-    const val VERSION = "2.0.0"
+    const val VERSION = "2.1.0"
     object Light {
         val paper = Color(0xFFFFFFFF)
         val ink = Color(0xFF1A1A1A)
@@ -93,6 +93,7 @@ object BaseTokens {
         val titleSize = 30.0.sp; val titleLine = 34.0.sp; const val titleWeight = 700
         val doorSize = 24.0.sp; val doorLine = 28.0.sp; const val doorWeight = 600
         val labelSize = 24.0.sp; val labelLine = 28.0.sp; const val labelWeight = 600
+        val smallSize = 18.0.sp; val smallLine = 22.0.sp; const val smallWeight = 600
     }
     object BodyType {
         val contentTitleSize = 22.0.sp; val contentTitleLine = 28.0.sp; const val contentTitleWeight = 600
