@@ -43,7 +43,6 @@ import com.showcase.desertant.ask.SummarySettings
 import androidx.compose.foundation.layout.heightIn
 import com.showcase.desertant.ui.hand.Caption
 import com.showcase.desertant.ui.hand.ChoicePill
-import com.showcase.desertant.ui.hand.DoneNote
 import com.showcase.desertant.ui.theme.Type
 import com.showcase.desertant.ui.hand.Doodle
 import com.showcase.desertant.ui.hand.Door
@@ -56,6 +55,7 @@ import com.showcase.desertant.ui.hand.SwitchRow
 import com.showcase.desertant.ui.meetings.LanguageSheet
 import com.showcase.desertant.ui.theme.Hand
 import com.showcase.desertant.ui.theme.ThemeMode
+import com.showcase.desertant.ui.theme.TypeStyle
 import com.showcase.desertant.ui.theme.Voice
 import com.showcase.desertant.ui.theme.burrow
 
@@ -66,7 +66,6 @@ fun AppSettingsScreen(onBack: () -> Unit, open: (String) -> Unit) {
     val appearance = context.app.appearance
     val mode by appearance.mode.collectAsState()
     val voice by appearance.voice.collectAsState()
-    val typeNote by appearance.typeNote.collectAsState()
     val summaries = LocalContext.current.app.summaries
     val language by summaries.language.collectAsState()
     val auto by summaries.auto.collectAsState()
@@ -75,17 +74,21 @@ fun AppSettingsScreen(onBack: () -> Unit, open: (String) -> Unit) {
 
     HandPage(onBack = onBack) {
         PageIntro("settings", "How Burrow looks, and where its privacy switches and models live.", doodle = Doodle.GEAR)
-        if (typeNote) DoneNote("Reading text is now a plain font. Change it under handwriting.", action = "ok", onAction = appearance::dismissTypeNote)
 
-        SectionHead("light or dark", note = "Burrow's own choice, whatever the phone is set to.", first = !typeNote)
+        val style = voice.style
+        SectionHead("handwritten or formal", note = style.note, first = true)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            TypeStyle.entries.forEach { s -> ChoicePill(s.label, s == style, { appearance.setStyle(s) }) }
+        }
+        Spacer(Modifier.height(12.dp))
+        style.voices.forEach { v -> VoiceRow(v, v == voice) { appearance.setVoice(v) } }
+
+        SectionHead("light or dark", note = "Burrow's own choice, whatever the phone is set to.")
         FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             ChoicePill("like the phone", mode == ThemeMode.SYSTEM, { appearance.setMode(ThemeMode.SYSTEM) }, leading = Doodle.PHONE)
             ChoicePill("light", mode == ThemeMode.LIGHT, { appearance.setMode(ThemeMode.LIGHT) }, leading = Doodle.SUN)
             ChoicePill("dark", mode == ThemeMode.DARK, { appearance.setMode(ThemeMode.DARK) }, leading = Doodle.MOON)
         }
-
-        SectionHead("handwriting", note = "Headings stay hand-lettered. Pick the face for everything you read.")
-        Voice.entries.forEach { v -> VoiceRow(v, v == voice) { appearance.setVoice(v) } }
 
         SectionHead("summaries", note = "Written on this phone: what each talk was about, what was decided, who does what by when.")
         Text("write them in", style = Hand.label, color = burrow.ink)
@@ -141,7 +144,7 @@ private fun VoiceRow(v: Voice, selected: Boolean, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(v.label, style = Hand.label, color = burrow.ink)
             // The sample is set in the voice itself, so the choice is made by looking.
-            Text("Priya promised to book the launch venue next week.", style = Type.body.copy(fontFamily = v.family), color = burrow.ink)
+            Text("Priya promised to book the launch venue next week.", style = Type.sample(v), color = burrow.ink)
             Caption(v.note)
         }
     }

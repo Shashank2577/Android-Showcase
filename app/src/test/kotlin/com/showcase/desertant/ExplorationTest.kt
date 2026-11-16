@@ -73,18 +73,32 @@ class ExplorationTest {
         compose.onRoot().captureRoboImage("build/explore/$name.png")
     }
 
-    private fun today(v: Voice) = render("voice-${v.ordinal}-${v.name.lowercase()}-today", v) { BurrowApp(app.hub, null) {} }
-    private fun notes(v: Voice) = render("voice-${v.ordinal}-${v.name.lowercase()}-notes", v) { BurrowApp(app.hub, "meeting/1") {} }
+    /** File names keep the numbering of the committed explorations: sans first, then the hands. */
+    private fun file(v: Voice) = "voice-${listOf(Voice.FORMAL, Voice.FRIENDLY, Voice.NEAT, Voice.LOOSE, Voice.HANDWRITTEN).indexOf(v)}-${v.name.lowercase()}"
+    private fun today(v: Voice) = render("${file(v)}-today", v) { BurrowApp(app.hub, null) {} }
+    private fun notes(v: Voice) = render("${file(v)}-notes", v) { BurrowApp(app.hub, "meeting/1") {} }
 
     @Test fun formalToday() = today(Voice.FORMAL)
     @Test fun friendlyToday() = today(Voice.FRIENDLY)
     @Test fun neatToday() = today(Voice.NEAT)
+    @Test fun looseToday() = today(Voice.LOOSE)
+    @Test fun handwrittenToday() = today(Voice.HANDWRITTEN)
     @Test fun formalNotes() = notes(Voice.FORMAL)
     @Test fun friendlyNotes() = notes(Voice.FRIENDLY)
     @Test fun neatNotes() = notes(Voice.NEAT)
+    @Test fun looseNotes() = notes(Voice.LOOSE)
+    @Test fun handwrittenNotes() = notes(Voice.HANDWRITTEN)
 
-    @Test fun settingsLight() = render("settings-light", Voice.DEFAULT) { AppSettingsScreen({}, {}) }
-    @Test fun settingsDark() = render("settings-dark", Voice.DEFAULT, ThemeMode.DARK) { AppSettingsScreen({}, {}) }
+    /** The settings page as it looks in [voice]: the stored choice and the theme are set together, as in the app. */
+    private fun settings(name: String, voice: Voice, mode: ThemeMode = ThemeMode.LIGHT) {
+        app.appearance.setVoice(voice)
+        render(name, voice, mode) { AppSettingsScreen({}, {}) }
+    }
+
+    @Test fun settingsLight() = settings("settings-light", Voice.DEFAULT)
+    @Test fun settingsDark() = settings("settings-dark", Voice.DEFAULT, ThemeMode.DARK)
+    @Test fun settingsFormal() = settings("settings-formal", Voice.FRIENDLY)
+    @Test fun settingsAllHandwritten() = settings("settings-all-handwritten", Voice.HANDWRITTEN)
     @Test fun askLight() = render("ask-concept-light", Voice.DEFAULT) { AskConcept() }
     @Test fun askDark() = render("ask-concept-dark", Voice.DEFAULT, ThemeMode.DARK) { AskConcept() }
 }

@@ -2,7 +2,7 @@
 
 Burrow is an Android app that handles everyday jobs end to end, using small AI models that run **only on your phone**. These are jobs people usually hand to cloud apps. It's built on the [Desert Ant Labs](https://desertant.com) on-device models (`ai.desertant:*:4.2.1`), plus open speech models for Indian and other languages.
 
-The current version is **4.0**, the readable edition: hand-drawn headings and buttons, with everything you read in a plain, legible face. It uses the *hand-drawn minimal* design system in [`design/burrow-a/theme`](design/burrow-a/theme/THEME.md), and is built around the product rethink in [`design/burrow-a/PRODUCT.md`](design/burrow-a/PRODUCT.md).
+The current version is **4.1**: the roomier, more structured layout of 4.0 with Burrow's own handwriting back as the default, and a *handwritten or formal* choice in settings for people who prefer a plain reading font. It uses the *hand-drawn minimal* design system in [`design/burrow-a/theme`](design/burrow-a/theme/THEME.md), and is built around the product rethink in [`design/burrow-a/PRODUCT.md`](design/burrow-a/PRODUCT.md).
 
 **Contents:**
 - [Showcase](#showcase)
@@ -11,7 +11,7 @@ The current version is **4.0**, the readable edition: hand-drawn headings and bu
 - [People, calls and chats](#people-speaker-profiles)
 - [Ask Burrow](#ask-burrow-on-device-tool-calling)
 - [What the models make possible](#what-the-models-make-possible)
-- [Appearance](#appearance-light-or-dark-and-a-reading-voice)
+- [Appearance](#appearance-handwritten-or-formal-light-or-dark)
 - [Design system](#design-system)
 - [Research and decisions](#research-and-decisions)
 - [What's next](#whats-next)
@@ -269,27 +269,45 @@ Permissions are asked for when they're first needed: the microphone when you fir
 
 *settings → models & languages → Model lab* has a playground for each of the 11 Android models, for trying them on their own: Voz, Ear, Who, Clear, Eye, Moderator, Redact, Gist, Emo, Tongue and Shapes.
 
-## Appearance: light or dark, and a reading voice
+## Appearance: handwritten or formal, light or dark
 
 *Settings* (the gear) has two choices, both stored on the phone:
 
+- **handwritten or formal:** two pills at the top of the page. Under them are the voices of the chosen style, each row showing a live sample. ([handwritten](design/burrow-a/explorations/settings-light.png), [formal](design/burrow-a/explorations/settings-formal.png))
 - **light or dark:** *like the phone*, *light* or *dark*, independent of the system setting. The status-bar icons follow Burrow's choice.
-- **handwriting:** headings, buttons and navigation are always hand-lettered; the face you read in comes in three voices, each row showing a live sample.
 
-| Voice | Font | Feel |
+| Kind of text | handwritten (default) | formal |
 | --- | --- | --- |
-| **friendly** (default) | Nunito | rounded, warm next to Caveat |
-| formal | Inter | the crispest |
-| neat hand | Shantell Sans, informality 0 | handwriting throughout, still on a straight baseline |
+| Wordmark, page titles, section heads, places, buttons, links, navigation | Caveat | Caveat |
+| Names and titles of things: a talk or person on its page, row titles, to-dos and ledger lines, tags | Caveat | the sans voice |
+| Sentences, summaries, transcripts, answers, meta lines, captions | the hand voice | the sans voice |
+| Placeholders like `[NAME_1]`, tool calls, logs | monospace | monospace |
 
-**Why 4.0 changed the type.** By 3.9 almost every sentence on a page was 13–15 sp grey handwriting, and anything bigger was cursive Caveat, including talk titles, people's names, model sizes and file names. Caveat's x-height is two thirds of a sans at the same size, so at 18–23 sp it reads like 12–15 sp. 4.0 follows the platform's readability review (`baseApp/design/REVIEW.md`, tokens 2.0.0):
-- Caveat only for the app's own short words, never under 24 sp, never for data or anything you wrote;
-- reading text at 16 sp (17 for summaries, transcripts and answers) in ink; meta lines 14, nothing under 13;
+| Style | Voice | Font |
+| --- | --- | --- |
+| handwritten | **neat hand** (default) | Shantell Sans, informality 0 |
+| handwritten | loose hand | Shantell Sans, informality 100 |
+| handwritten | all handwritten | Patrick Hand, set 14% larger because it draws small |
+| formal | **friendly** (default for formal) | Nunito |
+| formal | crisp | Inter |
+
+The handwritten style is the lettering Burrow had up to 3.9: the same typefaces for the same kinds of text. The formal style is the mapping 4.0 introduced. Sizes, spacing, colours and layout are the same in both; only the typefaces differ.
+
+**What 4.0 changed, and what 4.1 took back.** 4.0 followed the platform's readability review (`baseApp/design/REVIEW.md`, tokens 2.0.0). These parts stay in both styles:
+- reading text at 16 sp (17 for summaries, transcripts and answers) in ink; meta lines 14, nothing in a body face under 13;
 - darker grey (pencil 7.5:1, placeholders 5.3:1), and disabled buttons drawn in graphite instead of faded to 2:1;
 - every tap target at least 48 dp; one marker per screen, on a fact; red only for "!" and destructive actions;
-- "loose hand" and "all handwritten" removed. Every install moves to *friendly* once on the first start of 4.0 (all earlier installs had *neat hand* stored), and the settings page says so once.
+- the screen structure, spacing and line lengths.
 
-The earlier five-voice exploration is kept for reference: [`spectrum-today.png`](design/burrow-a/explorations/spectrum-today.png), [`spectrum-notes.png`](design/burrow-a/explorations/spectrum-notes.png).
+4.0 also replaced the fonts: it made Nunito the default, removed "loose hand" and "all handwritten", took Caveat off names, titles and tags, and moved every install to the plain font. That was not asked for, and 4.1 undoes it. The plain-font mapping is still there as *formal*, by choice. On the first start of 4.1:
+- an install that 4.0 moved to *friendly* goes back to the handwritten default once (4.0 was out for a few hours, and its forced move can't be told from a deliberate pick);
+- a voice picked by hand during 4.0 (*crisp* or *neat hand*) is kept;
+- an install coming straight from 3.9 or earlier keeps the voice it had stored, including "loose hand" and "all handwritten";
+- after that, whatever is chosen in settings stays.
+
+One difference from 3.9: there, a sans voice (Inter or Nunito) still had Caveat names and titles. In 4.1 the sans voices are the formal style, so an install that had picked one in 3.9 keeps its voice and gets plain names and titles; one tap on *handwritten* brings the hand-lettering back.
+
+The five voices on Today and talk notes: [`spectrum-today.png`](design/burrow-a/explorations/spectrum-today.png), [`spectrum-notes.png`](design/burrow-a/explorations/spectrum-notes.png), from before the 4.0 layout.
 
 **Why dark mode changed.** In 3.2, dark mode was near-white on near-black.
 - Thin hand-drawn strokes bloomed and blurred.
@@ -319,8 +337,9 @@ The *hand-drawn minimal* design system is documented in [`design/burrow-a/theme/
 - red pen only for the "!" mark and destructive actions.
 
 **Type** (named styles in `Theme.kt`; no font size is written anywhere else):
-- **Caveat** (`Hand.*`, 24 sp and up) for the wordmark, page titles, section heads, places, buttons, links and navigation;
-- the chosen **body voice** (`Type.*`) for everything you read: `contentTitle` 22, `reading` 17, `rowTitle` 17, `body` 16, `meta` 14, `caption` and `tag` 13;
+- **Caveat** (`Hand.*`, 24 sp and up) for the wordmark, page titles, section heads, places, buttons, links and navigation, in both styles;
+- the chosen **voice** (`Type.*`) for what you read: `reading` 17, `body` 16, `meta` 14, `caption` 13;
+- the names and titles of things (`Type.contentTitle`, `rowTitle`, `note`, `aside`, `tag`) follow the style: Caveat at 34, 26, 22, 18 and 18 sp when *handwritten*, the voice's sans at 22, 17, 16, 14 and 13 sp when *formal*;
 - monospace 13 for placeholders like `[NAME_1]` and tool calls.
 
 All fonts are bundled under the SIL Open Font License; the licences are in `design/burrow-a/theme/fonts/`.
@@ -511,6 +530,7 @@ The original concept screens are in `design/burrow-a/explorations/ask-concept-*.
 | 3.8 | **Shared models**: Desert Ant models, speech packs and Gemma live in the platform's shared model store, so another app of the vendor on the phone (PhoneDots) hands them over instead of downloading them again; resumable, SHA-256-checked downloads. **Logs** (settings → logs, copy all) for bug reports. Every build signed with the vendor key |
 | 3.9 | **Keeps going in the background**: while a model or speech pack downloads, or Burrow writes an answer, an ongoing notification (with progress) keeps Android from pausing it and the phone from sleeping mid-way |
 | 4.0 | **Readability redesign** (tokens 2.0.0): everything you read is a plain sans in ink (Nunito by default, migrated once), Caveat only for headings and buttons at 24 sp and up, darker greys, 48 dp targets, drawn disabled states. Tabs are **today · talks · ask · people**; photos and mask moved to today's tools. Today shows what needs you, new notes and tools under one *record* pill; talks has search, one *import* sheet and the *record* pill; a talk is summary · to-dos · transcript with the summary as prose and options in a *more* sheet; ask puts the answer first, steps behind a link and changes in a confirm sheet; people and person pages use plain rows; mask opens one stage at a time; models get capitals and one *download all*; setup is three short pages and permissions are asked on first use |
+| 4.1 | **The handwriting is back, with a choice.** Settings start with *handwritten or formal*. Handwritten is the default and is the 3.9 lettering on the 4.0 layout: Caveat again for names, titles, to-dos and tags, over the neat hand; "loose hand" and "all handwritten" (Patrick Hand) return. Formal is the 4.0 plain-font mapping. Installs that 4.0 moved to the plain font go back to handwritten once; the note about it is gone |
 
 Release APKs are built into `dist/`, which is git-ignored.
 
@@ -518,7 +538,7 @@ Release APKs are built into `dist/`, which is git-ignored.
 
 ```
 app/src/main/kotlin/com/showcase/desertant/
-  ui/theme/        colours, type, voices, Appearance (light/dark + voice setting)
+  ui/theme/        colours, type, voices, Appearance (light/dark, handwritten/formal + voice)
   ui/hand/         the hand-drawn components and doodles
   ui/shell/        navigation (BurrowApp), lock screen
   ui/today, photos, meetings, people, mask, privacy, settings, onboarding, share, ask

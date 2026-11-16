@@ -134,7 +134,7 @@ fun WhoRow(sender: String, messages: Int, who: Who, profiles: List<ProfileEntity
             Text(sender, style = Type.rowTitle, color = burrow.ink, maxLines = 1)
             Meta("$messages messages")
         }
-        Text("→ $label", style = Type.meta, color = if (who == Who.Nobody) burrow.pencil else burrow.ink)
+        Text("→ $label", Modifier.padding(start = 8.dp, end = 4.dp), style = Type.aside, maxLines = 1, color = if (who == Who.Nobody) burrow.pencil else burrow.ink)
         if (who is Who.Person && open != null) {
             Spacer(Modifier.width(4.dp))
             HandLink("page", { open("person/${who.id}") })

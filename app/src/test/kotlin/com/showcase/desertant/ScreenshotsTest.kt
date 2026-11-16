@@ -17,6 +17,8 @@ import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.github.takahirom.roborazzi.captureScreenRoboImage
+import androidx.compose.ui.test.isRoot
 import com.showcase.desertant.data.ChatEntity
 import com.showcase.desertant.data.ChatMessageEntity
 import com.showcase.desertant.data.ChatPersonEntity
@@ -44,6 +46,7 @@ import com.showcase.desertant.ui.privacy.PrivacyScreen
 import com.showcase.desertant.ui.share.ShareCheckScreen
 import com.showcase.desertant.ui.shell.BurrowApp
 import com.showcase.desertant.ui.theme.BurrowTheme
+import com.showcase.desertant.ui.theme.Voice
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
@@ -78,15 +81,23 @@ open class ScreenshotsTest {
     /** Subclasses render the same screens under another configuration, into files with this prefix. */
     protected open val prefix = ""
 
+    /** The voice the screens are lettered in: the handwritten default here, a sans voice in [FormalScreenshotsTest]. */
+    protected open val voice = Voice.DEFAULT
+
     @get:Rule
     val compose = createComposeRule()
 
     private val app: ShowcaseApp get() = ApplicationProvider.getApplicationContext()
 
-    private fun shot(name: String) = compose.onRoot().captureRoboImage("build/shots/$prefix$name.png")
+    private fun shot(name: String) {
+        val path = "build/shots/$prefix$name.png"
+        // A sheet is a second window: capture the whole screen then, not one of the two roots.
+        if (compose.onAllNodes(isRoot()).fetchSemanticsNodes().size > 1) captureScreenRoboImage(path)
+        else compose.onRoot().captureRoboImage(path)
+    }
 
     private fun show(content: @Composable () -> Unit) = compose.setContent {
-        BurrowTheme { CompositionLocalProvider(LocalModelHub provides app.hub) { content() } }
+        BurrowTheme(voice = voice) { CompositionLocalProvider(LocalModelHub provides app.hub) { content() } }
     }
 
     @Before
@@ -281,6 +292,12 @@ open class ScreenshotsTest {
 @Config(sdk = [34], qualifiers = "w412dp-h915dp-night-xhdpi")
 class DarkScreenshotsTest : ScreenshotsTest() {
     override val prefix = "dark-"
+}
+
+/** Every screen again in the formal style (Nunito for everything you read), to check both styles fit. */
+class FormalScreenshotsTest : ScreenshotsTest() {
+    override val prefix = "formal-"
+    override val voice = Voice.FRIENDLY
 }
 
 /**

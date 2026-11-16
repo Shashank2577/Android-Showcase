@@ -155,6 +155,6 @@ private fun LedgerLine(text: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
         DoodleIcon(Doodle.TICK, null, size = 18.dp)
         Spacer(Modifier.width(12.dp))
-        Text(text, style = Type.body, color = burrow.ink)
+        Text(text, style = Type.note, color = burrow.ink)
     }
 }

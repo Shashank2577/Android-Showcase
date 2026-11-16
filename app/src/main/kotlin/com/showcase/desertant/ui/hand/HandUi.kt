@@ -261,7 +261,7 @@ fun Warning(text: String, modifier: Modifier = Modifier) {
 /**
  * Long-form text: summaries, answers, transcripts. Reading size, capped at the
  * reading column, selectable. Understands a little Markdown: **bold**, `code`,
- * "-" and "1." lists, "> " quotes and "#" headings (set as row titles, never Caveat).
+ * "-" and "1." lists, "> " quotes and "#" headings (set as row titles).
  */
 @Composable
 fun Prose(text: String, modifier: Modifier = Modifier, color: Color = burrow.ink) {
@@ -485,7 +485,8 @@ fun Door(
 
 /**
  * A row of content: a talk, a person, a model, a file, a quote. The title is
- * the content's own name in the body face (with its real capitals), then an
+ * the content's own name (with its real capitals) in [Type.rowTitle]: Caveat in
+ * the handwritten style, the body face in the formal one, then an
  * optional meta line and caption. It opens something when [onClick] is set,
  * shown by a plain pencil arrow, or carries one [trailing] widget instead.
  * [below] adds a line under the text at full width (a progress line, a button).
@@ -974,7 +975,7 @@ fun DoneNote(text: String, modifier: Modifier = Modifier, action: String? = null
     ) {
         DoodleIcon(Doodle.TICK, null, size = 20.dp)
         Spacer(Modifier.width(10.dp))
-        Text(text, Modifier.weight(1f), style = Type.body, color = burrow.ink)
+        Text(text, Modifier.weight(1f), style = Type.note, color = burrow.ink)
         if (action != null && onAction != null) HandLink(action, onAction)
     }
 }

@@ -1,8 +1,8 @@
 # Burrow theme: Hand-drawn Minimal
 
-The look of the app reads like a neat notebook page. The paper is white, everything is drawn in ink, and one yellow marker swipe per screen shows what matters. The headings, buttons and navigation words are hand-lettered in Caveat; everything you actually read is a plain, clearly legible sans (Nunito by default) in ink.
+The look of the app reads like a neat notebook page. The paper is white, everything is drawn in ink, and one yellow marker swipe per screen shows what matters. The headings, buttons and navigation words are hand-lettered in Caveat. There are two styles for the rest, chosen in settings: **handwritten** (the default), where the names and titles of things are Caveat too and you read in a hand voice, and **formal**, where everything you read is a plain sans.
 
-**4.0, the readable edition** (tokens 2.0.0, from the platform's readability review in `baseApp/design/REVIEW.md`): hand-lettering went back to being a heading and a button. Caveat is never under 24 sp and never carries data or user content; sentences are ink at 16 sp, long-form text 17 sp; grey is darker; nothing readable is under 13 sp; every tap target is at least 48 dp. Pages are about 15–20% taller. That's the price, and it's worth paying.
+**4.0, the readable edition** (tokens 2.0.0, from the platform's readability review in `baseApp/design/REVIEW.md`): more structure and room. Sentences are ink at 16 sp, long-form text 17 sp; grey is darker; nothing readable is under 13 sp; every tap target is at least 48 dp. Pages are about 15–20% taller. 4.0 also made the plain font the only way to read; **4.1** keeps the layout, brings the 3.9 handwriting back as the default, and keeps the plain mapping as the *formal* style (see "Handwritten or formal" below).
 
 ![design system](shots/00-design-system.png)
 
@@ -13,7 +13,7 @@ The theme exists in three places, and all three hold the same values:
 | [`tokens.json`](tokens.json) | The source of truth: colors (light and dark), type, spacing, stroke and motion |
 | `app/src/main/kotlin/…/ui/theme/Theme.kt` | `BurrowTheme`. It maps the tokens onto Material 3 roles, so that any Material widget still in use (menus, dialogs) also comes out in paper and ink |
 | `app/src/main/kotlin/…/ui/hand/` | The hand-drawn components and the doodle icon set |
-| [`fonts/`](fonts) | Caveat, Nunito, Inter and Shantell Sans, all under the SIL Open Font License, bundled in the app with no runtime download |
+| [`fonts/`](fonts) | Caveat, Shantell Sans, Patrick Hand, Nunito and Inter, all under the SIL Open Font License, bundled in the app with no runtime download |
 
 ## Principles
 
@@ -21,7 +21,7 @@ The theme exists in three places, and all three hold the same values:
 2. **Only one thing gets the marker, and it's a fact.** The yellow swipe goes behind a single number or a word or two per screen (16 characters at most), such as "2.6 GB", "3 things" or "nothing". Never a page title, a tag row or a sentence.
 3. **Content sits on the paper, not on cards.** There are no cards or boxes around text, gradients or shadows. Summaries and answers sit on the paper; sections are separated by white space and sketchy hairlines. The only filled shape is the pale "smudge" well behind inputs and quoted text.
 4. **Words do the navigation.** The bottom bar is four hand-lettered words (*today · talks · ask · people*), and the current one gets a loose hand-drawn circle around it. There's no icon tab bar. Photos and mask open from today's *tools*.
-5. **You read in the body face; you tap, and find your place, in hand-lettering.** Caveat is for the app's own short words: the wordmark, page titles, section heads, places ("mask a message", "privacy"), buttons, links and nav words, four words or fewer. Names of talks, people, models and files, numbers, dates and anything the user wrote are set in the body face, with their real capitals.
+5. **Two styles, one structure.** In both, Caveat is for the app's own short words: the wordmark, page titles, section heads, places ("mask a message", "privacy"), buttons, links and nav words, four words or fewer. In the *handwritten* style the names of talks, people, models and files, to-dos and tags are Caveat as well, and sentences are in a hand voice. In the *formal* style all of those are in a sans voice. Names keep their real capitals in both.
 6. **Photos are snapshots.** They appear small, with a white border, slightly tilted, and with a 2 dp lift. Private photos are always blurred in two ways: the image is decoded at about 24 px and the blur is applied on top, so it stays unreadable even on Android versions that don't support blur.
 7. **The red pen is a mark, not a paragraph.** It's used for the "!" doodle, destructive buttons and links (*delete*, *wipe everything*). A warning is an ink sentence with a red "!" in front (`Warning`).
 8. **The text tells the truth.** For example, "recoverable for 30 days", "nothing of yours left this phone" (shown with the real byte count) and "learned 1 voice, with your OK".
@@ -37,17 +37,28 @@ These came out of the first round of use, when people said they were lost on som
 5. **After something happens, say so and offer the next step.** `DoneNote` reports the result inline ("Let go of 12 photos… back to photos"). Failures explain what to do, such as "download Hindi" or "set a screen lock".
 6. **Permissions show their state.** Each one shows either "allowed ✓" or an "allow" button, and a "settings" button once Android won't ask again. A switch is never used for something that can't be switched back off.
 
-## Reading voice and light/dark
+## Handwritten or formal, and light/dark
 
-Headings are always Caveat. The face you read in is a **voice** the user picks in *Settings → handwriting*; each row shows a live sample:
+*Settings* opens with two pills, **handwritten** and **formal**, and under them the voices of the chosen style, each row with a live sample.
 
-| Voice | Font | Feel |
+| Kind of text | handwritten (default) | formal |
 | --- | --- | --- |
-| **friendly** (default) | Nunito 400/600 | rounded, warm next to Caveat, reads cleanly at 13–17 sp |
-| formal | Inter 400/600 | the crispest option |
-| neat hand | Shantell Sans, informality 0 | for people who want handwriting throughout |
+| `Hand.*`: wordmark, page titles, section heads, places, buttons, links, nav | Caveat | Caveat |
+| `Type.contentTitle`, `rowTitle`, `note`, `aside`, `tag`: names and titles of things, to-dos, tags | Caveat | the sans voice |
+| `Type.reading`, `body`, `meta`, `caption`: what you read | the hand voice | the sans voice |
+| `Type.mono` | monospace | monospace |
 
-"loose hand" and "all handwritten" (Patrick Hand) were removed in 4.0: one moved letters off the baseline, the other needed enlarging to be legible. All three voices use the same sizes. The first start of 4.0 moves every install to *friendly* once (every earlier install had the old default, *neat hand*, stored) and says so once on the settings page; a stored "loose" or "all handwritten" becomes *neat hand*.
+| Style | Voice | Font | Feel |
+| --- | --- | --- | --- |
+| handwritten | **neat hand** (default) | Shantell Sans, informality 0 | marker-neat, on a straight baseline |
+| handwritten | loose hand | Shantell Sans, informality 100 | the same hand, relaxed |
+| handwritten | all handwritten | Patrick Hand | set at 1.14× because it draws small |
+| formal | **friendly** | Nunito 400/600 | rounded, warm next to Caveat |
+| formal | crisp | Inter 400/600 | the crispest option |
+
+The choice is made in one place: a `Voice` says whether it is a hand voice, and the five names-and-titles styles in `Type` pick Caveat for a hand voice and the voice's own face otherwise. Screens only name the style. Handwritten is the 3.9 lettering (same typefaces for the same kinds of text) at the 4.0 sizes or larger; formal is the 4.0 mapping.
+
+Stored choice: a fresh install is handwritten, neat hand. The first start of 4.1 puts an install that 4.0 had moved to *friendly* back on the default once, keeps a voice picked by hand in 4.0, and keeps whatever an install coming straight from 3.9 had stored. After that the choice in settings stays. In 3.9 a sans voice still had Caveat names and titles; in 4.1 the sans voices are the formal style.
 
 *Settings → light or dark* chooses like the phone, light, or dark, independent of the phone. The status-bar icons follow Burrow's choice. Dark is a warm charcoal "night notebook" (see the tokens below), not white on black: that combination made the thin hand strokes bloom and the yellow highlight glare.
 
@@ -65,7 +76,7 @@ Headings are always Caveat. The face you read in is a **voice** the user picks i
 | red pen | `#C81E1E` (5.7:1) | `#FF8A80` | The "!" mark and destructive actions only |
 | series / seriesDark | eight muted tones | eight lighter tones, each ≥ 6:1 | Speaker dots |
 
-**Type.** Hand-lettering (Caveat, clamped at 1.3× the phone's text size): display 52/58 (wordmark, welcome, record timer), headline 38/42 (page titles), title 30/34 (section heads, sheet titles), door 24/28 (places, switch titles), label 24/28 (buttons, links, nav words). Body face (follows the phone's text size fully): contentTitle 22/28 600 (a talk or person on its own page), reading 17/26 (summaries, transcripts, answers), rowTitle 17/24 600 (a row's talk, person, model or file), body 16/24 (sentences), meta 14/20 pencil, caption 13/18 pencil, tag 13/18 600, mono 13/20 ink (placeholders, tool calls, logs). Screens use the named styles (`Hand.*`, `Type.*` in `Theme.kt`); no font size is written anywhere else.
+**Type.** Hand-lettering in both styles (Caveat, clamped at 1.3× the phone's text size): display 52/58 (wordmark, welcome, record timer), headline 38/42 (page titles), title 30/34 (section heads, sheet titles), door 24/28 (places, switch titles), label 24/28 (buttons, links, nav words). The voice's face (follows the phone's text size fully): reading 17/26 (summaries, transcripts, answers), body 16/24 (sentences), meta 14/20 pencil, caption 13/18 pencil, mono 13/20 ink (placeholders, tool calls, logs). Names and titles, formal · handwritten: contentTitle 22/28 600 · Caveat 34/38 700 (a talk or person on its own page), rowTitle 17/24 600 · Caveat 26/30 600 (a row's talk, person, model or file), note 16/24 · Caveat 22/26 600 (a to-do, a ledger line, a done note), aside 14/20 · Caveat 18/22 600 (a remark beside a row), tag 13/18 600 · Caveat 18/22 600. The four Caveat sizes under 24 are Burrow's own and exist only in the handwritten style. Screens use the named styles (`Hand.*`, `Type.*` in `Theme.kt`); no font size is written anywhere else.
 
 **Sizes.** Every tap target is at least 48 dp; the ink pill is 56 high, pills 48, fields 52, rows 56. Text columns are capped at 560 dp, long-form text at 600. Two panes from 840 dp wide: a 360 list and the detail.
 
@@ -80,8 +91,8 @@ Headings are always Caveat. The face you read in is a **voice** the user picks i
 | `HandLink` | A tertiary action: lettering with a wobbly underline, padded to a 48 dp target |
 | `MarkedText` | Text with a marker swipe behind one substring. The swipe has rough ends and a slight tilt, and it follows line wraps |
 | `Door` | A hand-lettered line that leads to one of the app's own places, with a circled arrow, an optional red "!", and a meta line |
-| `ItemRow` | A row of content: a talk, person, model, file or quote. Its title is the content's own name in `rowTitle`, then a meta line and a caption; a plain pencil arrow when it opens something, or one trailing widget. The selected row in two panes has a smudge background and a 3 dp ink bar |
-| `Prose` | Long-form text at reading size, capped at 600 dp and selectable. Renders `**bold**`, `` `code` ``, "-" and "1." lists, "> " quotes and "#" headings (as row titles, never Caveat) |
+| `ItemRow` | A row of content: a talk, person, model, file or quote. Its title is the content's own name in `rowTitle` (Caveat when handwritten, the sans voice when formal), then a meta line and a caption; a plain pencil arrow when it opens something, or one trailing widget. The selected row in two panes has a smudge background and a 3 dp ink bar |
+| `Prose` | Long-form text at reading size, capped at 600 dp and selectable. Renders `**bold**`, `` `code` ``, "-" and "1." lists, "> " quotes and "#" headings (as row titles) |
 | `Warning` | An ink sentence with a red "!" in front |
 | `HandSwitch` and `SwitchRow` | A drawn toggle (an ink pill with a ticked knob) and the row it sits in on the privacy and permission screens |
 | `HandField` | A text well on smudge, with an optional leading doodle |

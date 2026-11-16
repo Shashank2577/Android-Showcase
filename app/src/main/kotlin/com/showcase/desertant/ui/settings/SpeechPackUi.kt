@@ -125,7 +125,7 @@ private fun LanguageChoice(label: String, selected: Boolean, onClick: () -> Unit
             .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, Modifier.weight(1f), style = Type.body, color = burrow.ink)
+        Text(label, Modifier.weight(1f), style = Type.note, color = burrow.ink)
         if (selected) Caption("now")
     }
 }

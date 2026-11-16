@@ -211,7 +211,7 @@ fun TodoLine(
         ) {
             Text(
                 t.what,
-                style = Type.body.copy(textDecoration = if (ticked) TextDecoration.LineThrough else null),
+                style = Type.note.copy(textDecoration = if (ticked) TextDecoration.LineThrough else null),
                 color = if (ticked) burrow.pencil else burrow.ink,
             )
             val meta = listOfNotNull(t.who?.takeIf { it.isNotBlank() }, dueLabel(t), context, t.at?.takeIf { showTime }?.let(::formatClock)).joinToString(" · ")
